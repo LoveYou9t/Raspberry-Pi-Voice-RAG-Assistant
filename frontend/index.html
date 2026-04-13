@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edge Voice RAG MVP</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel">
+        <h1>Edge Voice RAG</h1>
+        <p class="hint">Full-duplex websocket audio streaming client.</p>
+
+        <label for="wsUrl">WebSocket URL</label>
+        <input id="wsUrl" type="text" value="ws://localhost:8000/ws/audio-stream" />
+
+        <div class="buttons">
+          <button id="connectBtn">Connect + Start Mic</button>
+          <button id="disconnectBtn" class="secondary">Disconnect</button>
+          <button id="interruptBtn" class="danger">Interrupt</button>
+        </div>
+
+        <div class="status-row">
+          <span>Connection:</span>
+          <strong id="connectionStatus">disconnected</strong>
+        </div>
+
+        <div class="status-row">
+          <span>Audio:</span>
+          <strong id="audioStatus">idle</strong>
+        </div>
+
+        <pre id="logs" class="logs"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./voice-client.js"></script>
+  </body>
+</html>

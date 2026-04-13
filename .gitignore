@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+.env.local
+
+ollama_data/*
+!ollama_data/.gitkeep
+
+lancedb_data/*
+!lancedb_data/.gitkeep

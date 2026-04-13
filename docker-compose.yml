@@ -1,0 +1,51 @@
+services:
+  ollama_server:
+    image: ollama/ollama:latest
+    container_name: edge_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    command: ["/bin/sh", "-c", "ollama serve"]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  fastapi_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: edge_fastapi
+    restart: always
+    depends_on:
+      ollama_server:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://ollama_server:11434
+      - KNOWLEDGE_DIR=/app/knowledge_base
+      - LANCEDB_DIR=/app/lancedb_data
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./knowledge_base:/app/knowledge_base
+      - ./lancedb_data:/app/lancedb_data
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+
+  frontend_client:
+    image: nginx:alpine
+    container_name: edge_frontend
+    restart: always
+    depends_on:
+      - fastapi_backend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
