@@ -95,6 +95,25 @@
    检查浏览器麦克风权限，并查看后端 WebSocket 日志。
 4. 内存不足或系统卡顿：
    建议降低模型规格，或减少并发使用。
+5. `https://registry-1.docker.io/` 返回 404：
+   这是正常现象，根路径不是镜像拉取 API。请用以下方式判断是否可用：
+   curl -I <https://registry-1.docker.io/v2/>
+   能返回 `401 Unauthorized`（或带 `Docker-Distribution-Api-Version` 响应头）通常表示服务正常。
+6. 拉取镜像超时或连接失败：
+   可配置 Docker Hub 镜像加速（示例）：
+   sudo mkdir -p /etc/docker
+   sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+   {
+     "registry-mirrors": [
+       "https://docker.m.daocloud.io",
+       "https://mirror.ccs.tencentyun.com",
+       "https://hub-mirror.c.163.com"
+     ]
+   }
+   EOF
+   sudo systemctl daemon-reload
+   sudo systemctl restart docker
+   docker pull nginx:alpine
 
 ## 10. 开机自动恢复（可选）
 
