@@ -23,6 +23,7 @@ stt_service = STTService(
     sample_rate=settings.sample_rate,
     min_silence_ms=settings.vad_min_silence_ms,
     threshold=settings.vad_threshold,
+    model_name=settings.stt_model,
 )
 rag_service = RAGService(
     knowledge_dir=settings.knowledge_dir,
@@ -183,6 +184,7 @@ async def healthz() -> dict[str, str]:
     return {
         "status": "ok",
         "stt_backend": stt_service.backend,
+        "stt_model": settings.stt_model,
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
     }

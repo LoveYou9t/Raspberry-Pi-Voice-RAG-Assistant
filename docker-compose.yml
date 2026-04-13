@@ -7,13 +7,50 @@ services:
       - "11434"
     volumes:
       - ./ollama_data:/root/.ollama
-    command: ["/bin/sh", "-c", "ollama serve"]
     healthcheck:
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 40
       start_period: 90s
+
+  ollama_init:
+    image: ollama/ollama:latest
+    container_name: edge_ollama_init
+    restart: "no"
+    depends_on:
+      ollama_server:
+        condition: service_started
+    environment:
+      - OLLAMA_HOST=http://ollama_server:11434
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
+    volumes:
+      - ./ollama_data:/root/.ollama
+    command:
+      - /bin/sh
+      - -c
+      - |
+        until ollama list >/dev/null 2>&1; do
+          echo "Waiting for Ollama service..."
+          sleep 2
+        done
+        ollama pull "${LLM_MODEL}"
+
+  stt_init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: edge_stt_init
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      - STT_MODEL=${STT_MODEL:-tiny}
+      - HF_HOME=/app/model_cache/hf
+      - XDG_CACHE_HOME=/app/model_cache/xdg
+    volumes:
+      - ./whisper_cache:/app/model_cache
+    command: ["python", "-m", "app.prewarm_stt"]
 
   fastapi_backend:
     build:
@@ -24,17 +61,24 @@ services:
     depends_on:
       ollama_server:
         condition: service_started
+      ollama_init:
+        condition: service_completed_successfully
+      stt_init:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
       - OLLAMA_HOST=http://ollama_server:11434
       - KNOWLEDGE_DIR=/app/knowledge_base
       - LANCEDB_DIR=/app/lancedb_data
+      - HF_HOME=/app/model_cache/hf
+      - XDG_CACHE_HOME=/app/model_cache/xdg
     ports:
       - "8000:8000"
     volumes:
       - ./knowledge_base:/app/knowledge_base
       - ./lancedb_data:/app/lancedb_data
+      - ./whisper_cache:/app/model_cache
     deploy:
       resources:
         limits:

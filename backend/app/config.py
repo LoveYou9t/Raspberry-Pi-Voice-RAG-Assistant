@@ -40,10 +40,11 @@ class Settings:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    llm_model: str = os.getenv("LLM_MODEL", "llama3.2:1b")
+    llm_model: str = os.getenv("LLM_MODEL", "llama3.2:3b")
     llm_num_ctx: int = _get_int("LLM_NUM_CTX", 4096)
     llm_temperature: float = _get_float("LLM_TEMPERATURE", 0.3)
     llm_top_k: int = _get_int("LLM_TOP_K", 40)
+    stt_model: str = os.getenv("STT_MODEL", "tiny")
 
     sample_rate: int = _get_int("SAMPLE_RATE", 16000)
     audio_chunk_seconds: float = _get_float("AUDIO_CHUNK_SECONDS", 1.0)

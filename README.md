@@ -13,13 +13,15 @@
 
 ## 快速开始
 
-1. 编辑 `.env` 调整模型与阈值。
+1. 编辑 `.env` 调整模型与阈值（默认 `LLM_MODEL=llama3.2:3b`、`STT_MODEL=tiny`）。
 2. 准备知识库文件到 `knowledge_base/`。
 3. 启动：
 
 ```bash
 docker compose up -d --build
 ```
+
+首次启动会自动预热 llama3.2:3b 与 faster-whisper tiny，耗时会明显长于后续启动。
 
 可选预热脚本：
 
@@ -31,6 +33,13 @@ sh bootstrap.sh
 
 - 前端: <http://localhost:8080>
 - 后端健康检查: <http://localhost:8000/healthz>
+
+可选验证：
+
+```bash
+docker exec edge_ollama ollama list
+curl http://localhost:8000/healthz
+```
 
 ## 目录结构
 

@@ -41,15 +41,17 @@
    docker compose up -d --build
 2. 查看容器状态：
    docker compose ps
-3. 看到以下容器为 Up 即表示启动成功：
-   edge_ollama、edge_fastapi、edge_frontend
+3. 首次启动会自动预热 `llama3.2:3b` 与 `faster-whisper tiny`，耗时会更长。
+4. 启动成功时，关键容器状态一般为：
+   edge_ollama、edge_fastapi、edge_frontend 为 Up；
+   edge_ollama_init、edge_stt_init 为 Exited (0)。
 
-## 5. 首次模型预热（可选但推荐）
+## 5. 模型预热检查（自动）
 
-1. 拉取默认模型：
-   docker exec edge_ollama ollama pull llama3.2:3b
-2. 查看模型列表：
+1. 查看 Ollama 模型列表：
    docker exec edge_ollama ollama list
+2. 查看后端健康检查（确认 STT/LLM 配置）：
+   curl <http://127.0.0.1:8000/healthz>
 
 ## 6. 验证服务
 
@@ -130,6 +132,10 @@
    docker compose up -d --build
    如仍异常，查看 Ollama 日志：
    docker compose logs -f ollama_server
+10. 首次启动时间较长、误以为卡住：
+   这是模型预热过程导致的正常现象，可用以下命令观察进度：
+   docker compose logs -f ollama_init
+   docker compose logs -f stt_init
 
 ## 10. 开机自动恢复（可选）
 

@@ -16,7 +16,7 @@ class STTService:
         sample_rate: int,
         min_silence_ms: int,
         threshold: float,
-        model_name: str = "distil-large-v3",
+        model_name: str = "tiny",
     ) -> None:
         self.sample_rate = sample_rate
         self.min_silence_ms = min_silence_ms

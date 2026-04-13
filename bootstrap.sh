@@ -1,20 +1,17 @@
 #!/usr/bin/env sh
 set -eu
 
-LLM_MODEL="${LLM_MODEL:-llama3.2:1b}"
+LLM_MODEL="${LLM_MODEL:-llama3.2:3b}"
+STT_MODEL="${STT_MODEL:-tiny}"
 
-echo "[1/4] 启动 Ollama 服务..."
-docker compose up -d ollama_server
+echo "[1/3] 设置默认模型参数..."
+export LLM_MODEL
+export STT_MODEL
 
-echo "[2/4] 等待 Ollama 就绪..."
-until docker exec edge_ollama ollama list >/dev/null 2>&1; do
-  sleep 2
-done
+echo "[2/3] 一键构建并启动全部服务（含模型预热）..."
+docker compose up -d --build
 
-echo "[3/4] 预拉取模型: ${LLM_MODEL}"
-docker exec edge_ollama ollama pull "${LLM_MODEL}"
+echo "[3/3] 当前容器状态："
+docker compose ps
 
-echo "[4/4] 启动后端与前端..."
-docker compose up -d --build fastapi_backend frontend_client
-
-echo "完成。前端: http://localhost:8080  后端: http://localhost:8000"
+echo "完成。前端: http://localhost:8080 后端: http://localhost:8000"
