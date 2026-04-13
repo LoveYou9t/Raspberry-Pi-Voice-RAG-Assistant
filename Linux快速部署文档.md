@@ -123,6 +123,13 @@
 8. 出现 `Your kernel does not support memory limit capabilities`：
    这是宿主机 cgroup memory 未启用导致，当前仅表示内存限制未生效，不影响容器启动。
    如需启用限制，请在系统层开启 cgroup memory（不同发行版配置方式不同）。
+9. 出现 `dependency failed to start: container edge_ollama is unhealthy`：
+   先更新到最新 compose 配置并清理旧容器状态后重启：
+   git pull --rebase
+   docker compose rm -sf ollama_server
+   docker compose up -d --build
+   如仍异常，查看 Ollama 日志：
+   docker compose logs -f ollama_server
 
 ## 10. 开机自动恢复（可选）
 
