@@ -114,6 +114,15 @@
    sudo systemctl daemon-reload
    sudo systemctl restart docker
    docker pull nginx:alpine
+7. 出现 `bind: address already in use`（11434 端口占用）：
+   当前项目默认已不再对宿主机发布 Ollama 11434 端口，更新代码后重新执行：
+   git pull --rebase
+   docker compose up -d --build
+   如果你本地改过 `docker-compose.yml` 并恢复了 `11434:11434` 映射，请改回仅容器内通信，或先停止宿主机 Ollama：
+   sudo systemctl stop ollama
+8. 出现 `Your kernel does not support memory limit capabilities`：
+   这是宿主机 cgroup memory 未启用导致，当前仅表示内存限制未生效，不影响容器启动。
+   如需启用限制，请在系统层开启 cgroup memory（不同发行版配置方式不同）。
 
 ## 10. 开机自动恢复（可选）
 

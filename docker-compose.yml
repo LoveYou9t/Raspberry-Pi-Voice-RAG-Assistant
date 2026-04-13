@@ -3,8 +3,8 @@ services:
     image: ollama/ollama:latest
     container_name: edge_ollama
     restart: always
-    ports:
-      - "11434:11434"
+    expose:
+      - "11434"
     volumes:
       - ./ollama_data:/root/.ollama
     command: ["/bin/sh", "-c", "ollama serve"]
