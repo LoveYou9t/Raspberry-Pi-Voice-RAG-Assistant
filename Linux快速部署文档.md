@@ -143,6 +143,13 @@
    docker compose up -d --build
    之后可单独检查预热日志：
    docker compose logs -f ollama_init
+12. 出现 `service "stt_init" didn't complete successfully: exit 1`：
+   请先更新代码后重建（新版已将 stt_init 改为非阻断兜底执行）：
+   git pull --rebase
+   docker compose down --remove-orphans
+   docker compose up -d --build
+   如需查看具体原因：
+   docker compose logs -f stt_init
 
 ## 10. 开机自动恢复（可选）
 

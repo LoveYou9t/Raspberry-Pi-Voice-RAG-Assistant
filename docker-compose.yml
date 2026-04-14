@@ -70,6 +70,9 @@ services:
       dockerfile: Dockerfile
     container_name: edge_stt_init
     restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
     env_file:
       - .env
     environment:
@@ -78,7 +81,7 @@ services:
       - XDG_CACHE_HOME=/app/model_cache/xdg
     volumes:
       - ./whisper_cache:/app/model_cache
-    command: ["python", "-m", "app.prewarm_stt"]
+    command: python -m app.prewarm_stt || true
 
   fastapi_backend:
     build:
