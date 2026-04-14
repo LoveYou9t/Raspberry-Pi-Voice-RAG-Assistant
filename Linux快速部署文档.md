@@ -164,6 +164,13 @@
    docker compose logs -f piper_init
    docker compose logs -f fastapi_backend
    确认容器内存在模型文件路径（默认 `/app/piper_cache/zh_CN-huayan-medium.onnx`）。
+15. 构建阶段出现 `pip ... ProtocolError: Broken pipe`：
+   这通常是网络抖动导致。新版 compose 已改为 `fastapi_backend` 单次构建并复用镜像给 `stt_init/piper_init`。
+   请执行：
+   docker compose down --remove-orphans
+   docker compose build --no-cache fastapi_backend
+   docker compose up -d
+   若仍失败，可先在 `.env` 里将 `PIP_INDEX_URL` 改为可访问镜像（示例：`https://pypi.tuna.tsinghua.edu.cn/simple`）后重试。
 
 ## 10. 开机自动恢复（可选）
 

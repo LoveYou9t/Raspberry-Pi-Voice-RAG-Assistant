@@ -66,9 +66,7 @@ services:
         exit 0
 
   stt_init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: edge_voice_backend:latest
     container_name: edge_stt_init
     restart: "no"
     env_file:
@@ -86,9 +84,7 @@ services:
         python -m app.prewarm_stt || true
 
   piper_init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: edge_voice_backend:latest
     container_name: edge_piper_init
     restart: "no"
     env_file:
@@ -106,9 +102,12 @@ services:
         python -m app.prewarm_piper
 
   fastapi_backend:
+    image: edge_voice_backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        - PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.org/simple}
     container_name: edge_fastapi
     restart: always
     depends_on:
