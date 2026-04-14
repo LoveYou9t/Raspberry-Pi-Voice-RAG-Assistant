@@ -22,6 +22,7 @@ docker compose up -d --build
 ```
 
 首次启动会自动预热 llama3.2:3b 与 faster-whisper tiny，耗时会明显长于后续启动。
+如果网络临时不可用，预热会重试并记录告警，服务仍可继续启动。
 
 可选预热脚本：
 

@@ -136,6 +136,13 @@
    这是模型预热过程导致的正常现象，可用以下命令观察进度：
    docker compose logs -f ollama_init
    docker compose logs -f stt_init
+11. 出现 `service "ollama_init" didn't complete successfully: exit 1`：
+   请先更新代码后重建（新版已增加重试并避免预热失败阻断启动）：
+   git pull --rebase
+   docker compose down --remove-orphans
+   docker compose up -d --build
+   之后可单独检查预热日志：
+   docker compose logs -f ollama_init
 
 ## 10. 开机自动恢复（可选）
 
