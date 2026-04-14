@@ -175,7 +175,11 @@
    如需查看具体原因：
    docker compose logs -f stt_init
 13. 出现 `service "piper_init" didn't complete successfully: exit 1`：
-   先检查模型下载与二进制日志：
+   这通常说明本地仍在使用旧版 compose（新版已将 `piper_init` 设为非阻断）。先更新后重建：
+   git pull --rebase
+   docker compose down --remove-orphans
+   docker compose up -d --build
+   再检查模型下载与二进制日志：
    docker compose logs -f piper_init
    如果是网络问题，可在 `.env` 中替换 `PIPER_MODEL_URL` 与 `PIPER_MODEL_CONFIG_URL` 到可访问镜像地址后重试：
    docker compose up -d --build

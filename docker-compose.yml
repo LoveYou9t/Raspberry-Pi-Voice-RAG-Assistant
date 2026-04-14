@@ -108,7 +108,7 @@ services:
       - /bin/sh
       - -c
       - |
-        python -m app.prewarm_piper
+        python -m app.prewarm_piper || true
 
   fastapi_backend:
     image: edge_voice_backend:latest
@@ -128,7 +128,7 @@ services:
       stt_init:
         condition: service_completed_successfully
       piper_init:
-        condition: service_completed_successfully
+        condition: service_started
     env_file:
       - .env
     environment:

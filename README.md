@@ -24,7 +24,7 @@ docker compose up -d --build
 ```
 
 首次启动会自动预热 llama3.2:3b、faster-whisper tiny，并下载/校验 Piper 模型，耗时会明显长于后续启动。
-若 piper_init 失败，fastapi_backend 不会启动，请先查看 piper_init 日志定位原因。
+若 piper_init 失败，服务会继续启动，但 TTS 可能降级或不可用；请查看 piper_init 日志定位原因。
 
 可选预热脚本：
 
