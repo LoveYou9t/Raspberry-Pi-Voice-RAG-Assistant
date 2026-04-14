@@ -36,6 +36,14 @@ class Settings:
     app_host: str = os.getenv("APP_HOST", "0.0.0.0")
     app_port: int = _get_int("APP_PORT", 8000)
     ws_path: str = os.getenv("WS_PATH", "/ws/audio-stream")
+    uart_enabled: bool = _get_bool("UART_ENABLED", False)
+    uart_port: str = os.getenv("UART_PORT", "/dev/ttyAMA0")
+    uart_baudrate: int = _get_int("UART_BAUDRATE", 115200)
+    uart_timeout_ms: int = _get_int("UART_TIMEOUT_MS", 50)
+    uart_read_size: int = _get_int("UART_READ_SIZE", 1024)
+    uart_frame_payload_bytes: int = _get_int("UART_FRAME_PAYLOAD_BYTES", 240)
+    uart_audio_codec: str = os.getenv("UART_AUDIO_CODEC", "ulaw8k")
+    uart_device_sample_rate: int = _get_int("UART_DEVICE_SAMPLE_RATE", 8000)
 
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

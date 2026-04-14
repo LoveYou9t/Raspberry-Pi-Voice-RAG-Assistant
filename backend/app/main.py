@@ -7,6 +7,7 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -15,6 +16,7 @@ from app.services.llm_inference import OllamaLLMService
 from app.services.rag_retrieval import RAGService
 from app.services.stt_engine import STTService
 from app.services.tts_pipeline import PiperTTSService
+from app.services.uart_gateway import UartGateway
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ llm_service = OllamaLLMService(
     temperature=settings.llm_temperature,
     top_k=settings.llm_top_k,
 )
+uart_gateway: UartGateway | None = None
 
 
 @dataclass
@@ -81,6 +84,31 @@ def _build_tts_status() -> dict[str, str | bool]:
         "piper_mock_allowed": settings.piper_use_mock_on_missing,
         "tts_mode": tts_mode,
     }
+
+
+def _build_uart_status() -> dict[str, Any]:
+    if not settings.uart_enabled:
+        return {
+            "enabled": False,
+            "running": False,
+            "connected": False,
+            "port": settings.uart_port,
+            "baudrate": settings.uart_baudrate,
+            "audio_codec": settings.uart_audio_codec,
+        }
+
+    if uart_gateway is None:
+        return {
+            "enabled": True,
+            "running": False,
+            "connected": False,
+            "port": settings.uart_port,
+            "baudrate": settings.uart_baudrate,
+            "audio_codec": settings.uart_audio_codec,
+            "last_error": "uart gateway not initialized",
+        }
+
+    return uart_gateway.snapshot()
 
 
 def _clear_queue(queue_obj: asyncio.Queue) -> None:
@@ -196,6 +224,8 @@ async def _shutdown_session(state: SessionState) -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    global uart_gateway
+
     tts_status = _build_tts_status()
     logger.info(
         "Startup summary | llm_model=%s stt_model=%s rag_mode=%s",
@@ -212,19 +242,48 @@ async def on_startup() -> None:
         tts_status["piper_mock_allowed"],
     )
 
+    if settings.uart_enabled:
+        uart_gateway = UartGateway(
+            settings=settings,
+            stt_service=stt_service,
+            rag_service=rag_service,
+            llm_service=llm_service,
+            ingest_threshold_bytes=INGEST_THRESHOLD_BYTES,
+        )
+        await uart_gateway.start()
+        logger.info(
+            "Startup summary | uart_enabled=%s port=%s baudrate=%s codec=%s",
+            settings.uart_enabled,
+            settings.uart_port,
+            settings.uart_baudrate,
+            settings.uart_audio_codec,
+        )
+    else:
+        logger.info("Startup summary | uart_enabled=%s", settings.uart_enabled)
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    global uart_gateway
+    if uart_gateway is not None:
+        await uart_gateway.stop()
+        uart_gateway = None
+
 
 @app.get("/")
-async def root() -> dict[str, str]:
+async def root() -> dict[str, Any]:
     return {
         "service": "edge-voice-rag",
         "status": "running",
         "ws": settings.ws_path,
+        "uart_enabled": settings.uart_enabled,
     }
 
 
 @app.get("/healthz")
-async def healthz() -> dict[str, str | bool]:
+async def healthz() -> dict[str, Any]:
     tts_status = _build_tts_status()
+    uart_status = _build_uart_status()
     status = "ok" if tts_status["tts_mode"] != "unavailable" else "degraded"
     return {
         "status": status,
@@ -232,6 +291,7 @@ async def healthz() -> dict[str, str | bool]:
         "stt_model": settings.stt_model,
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
+        "uart": uart_status,
         **tts_status,
     }
 

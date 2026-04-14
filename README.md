@@ -5,6 +5,7 @@
 ## 功能范围（当前）
 
 - WebSocket 全双工音频传输（上行麦克风 / 下行 PCM）
+- UART 有线半双工语音链路（实验版，支持上行语音与下行 TTS 回传）
 - STT（Faster-Whisper，缺失时自动降级）
 - RAG 检索（LanceDB 检索，缺失时回退文件检索）
 - LLM 流式生成（Ollama）
@@ -44,6 +45,37 @@ curl http://localhost:8000/healthz
 ```
 
 `/healthz` 会返回 `tts_mode`、`piper_bin_found`、`piper_model_exists` 等字段。
+
+## UART 有线模式（实验版）
+
+后端已支持可选 UART 模式，默认关闭，不影响现有 WebSocket 使用。
+
+1. 在 `.env` 配置 UART 参数（示例）：
+
+```bash
+UART_ENABLED=1
+UART_PORT=/dev/ttyAMA0
+UART_BAUDRATE=115200
+UART_AUDIO_CODEC=ulaw8k
+UART_DEVICE_SAMPLE_RATE=8000
+```
+
+2. 在树莓派主机上开启容器设备透传（取消 [docker-compose.yml](docker-compose.yml) 中 `fastapi_backend` 的 `devices` 注释）。
+3. 重启服务：
+
+```bash
+docker compose up -d --build
+```
+
+4. 查看健康状态：
+
+```bash
+curl http://localhost:8000/healthz
+```
+
+`healthz` 中的 `uart` 字段会返回 `running`、`connected`、`rx_frames`、`tx_frames`、`crc_errors` 等运行指标。
+
+说明：115200 带宽下不适合直接传 16k PCM，当前默认使用 `ulaw8k`，用于降低串口占用并提升稳定性。
 
 ## 目录结构
 

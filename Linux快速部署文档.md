@@ -66,7 +66,27 @@
 3. 局域网访问（其他设备）：
    <http://Linux主机IP:8080>
 
-## 7. 常用运维命令
+## 7. 启用 UART 有线模式（实验版，可选）
+
+如果你需要走树莓派串口与 MCU/ESP32 有线通讯，请按以下步骤启用。
+
+1. 编辑 `.env` 并增加参数：
+   UART_ENABLED=1
+   UART_PORT=/dev/ttyAMA0
+   UART_BAUDRATE=115200
+   UART_AUDIO_CODEC=ulaw8k
+   UART_DEVICE_SAMPLE_RATE=8000
+2. 在 `docker-compose.yml` 中，取消 `fastapi_backend` 的 `devices` 注释，使串口设备映射到容器。
+3. 重新启动服务：
+   docker compose up -d --build
+4. 查看健康检查：
+   curl <http://127.0.0.1:8000/healthz>
+5. 在返回结果的 `uart` 字段中确认：
+   `running=true`、`connected=true`。
+
+提示：115200 带宽有限，建议保持 `UART_AUDIO_CODEC=ulaw8k`。若改为原始 PCM，易出现卡顿或丢帧。
+
+## 8. 常用运维命令
 
 1. 查看全部日志：
    docker compose logs -f
@@ -77,7 +97,7 @@
 4. 停止服务：
    docker compose down
 
-## 8. Git 更新发布（后续升级）
+## 9. Git 更新发布（后续升级）
 
 当仓库代码更新后，按以下步骤升级：
 
@@ -91,7 +111,7 @@
 4. 验证状态：
    docker compose ps
 
-## 9. 快速排障
+## 10. 快速排障
 
 1. Ollama 未就绪：
    docker compose logs -f ollama_server
@@ -171,8 +191,15 @@
    docker compose build --no-cache fastapi_backend
    docker compose up -d
    若仍失败，可先在 `.env` 里将 `PIP_INDEX_URL` 改为可访问镜像（示例：`https://pypi.tuna.tsinghua.edu.cn/simple`）后重试。
+16. `uart.connected=false` 或日志提示 `failed to open serial port`：
+   先确认宿主机设备存在：
+   ls -l /dev/ttyAMA0
+   再确认 compose 已打开 `devices` 映射且 `UART_PORT` 与映射后的容器路径一致。
+17. `crc_errors` 持续增长：
+   说明串口链路噪声或帧配置不匹配。请优先检查：
+   波特率是否一致（两端都 115200）、地线是否共地、帧格式是否一致（协议头/CRC）。
 
-## 10. 开机自动恢复（可选）
+## 11. 开机自动恢复（可选）
 
 当前 compose 已配置 restart: always，系统重启后 Docker 服务拉起时会自动恢复容器。
 如果未自动恢复，请手动执行：

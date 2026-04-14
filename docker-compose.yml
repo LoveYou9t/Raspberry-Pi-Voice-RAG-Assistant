@@ -127,6 +127,17 @@ services:
       - LANCEDB_DIR=/app/lancedb_data
       - HF_HOME=/app/model_cache/hf
       - XDG_CACHE_HOME=/app/model_cache/xdg
+      - UART_ENABLED=${UART_ENABLED:-0}
+      - UART_PORT=${UART_PORT:-/dev/ttyAMA0}
+      - UART_BAUDRATE=${UART_BAUDRATE:-115200}
+      - UART_TIMEOUT_MS=${UART_TIMEOUT_MS:-50}
+      - UART_READ_SIZE=${UART_READ_SIZE:-1024}
+      - UART_FRAME_PAYLOAD_BYTES=${UART_FRAME_PAYLOAD_BYTES:-240}
+      - UART_AUDIO_CODEC=${UART_AUDIO_CODEC:-ulaw8k}
+      - UART_DEVICE_SAMPLE_RATE=${UART_DEVICE_SAMPLE_RATE:-8000}
+    # Enable these lines on Raspberry Pi to pass the physical UART device through.
+    # devices:
+    #   - "${UART_PORT_HOST:-/dev/ttyAMA0}:${UART_PORT:-/dev/ttyAMA0}"
     ports:
       - "8000:8000"
     volumes:
