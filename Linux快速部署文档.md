@@ -56,6 +56,7 @@
    curl <http://127.0.0.1:8000/healthz>
 4. 在健康检查结果中确认以下字段：
    `tts_mode=real`、`piper_bin_found=true`、`piper_model_exists=true`
+   以及 `prewarm.stt.ok=true`、`prewarm.piper.ok=true`
 
 ## 6. 验证服务
 
@@ -168,14 +169,17 @@
    之后可单独检查预热日志：
    docker compose logs -f ollama_init
 12. 出现 `service "stt_init" didn't complete successfully: exit 1`：
-   请先更新代码后重建（新版已将 stt_init 改为非阻断兜底执行）：
+   默认非严格模式下不会出现（`STT_PREWARM_STRICT=0`）。若你手动设置了严格模式，请先改回 0 再重建：
+   STT_PREWARM_STRICT=0
    git pull --rebase
    docker compose down --remove-orphans
    docker compose up -d --build
    如需查看具体原因：
    docker compose logs -f stt_init
 13. 出现 `service "piper_init" didn't complete successfully: exit 1`：
-   这通常说明本地仍在使用旧版 compose（新版已将 `piper_init` 设为非阻断）。先更新后重建：
+   默认非严格模式下不会出现（`PIPER_PREWARM_STRICT=0`）。若你手动设置了严格模式，请先改回 0 再重建：
+   PIPER_PREWARM_STRICT=0
+   这通常也可能说明本地仍在使用旧版 compose（新版已将 `piper_init` 设为非阻断）。先更新后重建：
    git pull --rebase
    docker compose down --remove-orphans
    docker compose up -d --build

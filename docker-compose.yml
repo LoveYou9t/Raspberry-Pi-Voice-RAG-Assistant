@@ -82,6 +82,8 @@ services:
       - .env
     environment:
       - STT_MODEL=${STT_MODEL:-tiny}
+      - STT_PREWARM_STRICT=${STT_PREWARM_STRICT:-0}
+      - STT_PREWARM_STATUS_FILE=${STT_PREWARM_STATUS_FILE:-/app/model_cache/stt_prewarm_status.json}
       - HF_HOME=/app/model_cache/hf
       - XDG_CACHE_HOME=/app/model_cache/xdg
     volumes:
@@ -90,7 +92,7 @@ services:
       - /bin/sh
       - -c
       - |
-        python -m app.prewarm_stt || true
+        python -m app.prewarm_stt
 
   piper_init:
     image: edge_voice_backend:latest
@@ -102,13 +104,15 @@ services:
       - PIPER_MODEL=${PIPER_MODEL:-/app/piper_cache/zh_CN-huayan-medium.onnx}
       - PIPER_MODEL_URL=${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx}
       - PIPER_MODEL_CONFIG_URL=${PIPER_MODEL_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json}
+      - PIPER_PREWARM_STRICT=${PIPER_PREWARM_STRICT:-0}
+      - PIPER_PREWARM_STATUS_FILE=${PIPER_PREWARM_STATUS_FILE:-/app/piper_cache/piper_prewarm_status.json}
     volumes:
       - ./piper_cache:/app/piper_cache
     command:
       - /bin/sh
       - -c
       - |
-        python -m app.prewarm_piper || true
+        python -m app.prewarm_piper
 
   fastapi_backend:
     image: edge_voice_backend:latest
@@ -135,6 +139,8 @@ services:
       - OLLAMA_HOST=http://ollama_server:11434
       - KNOWLEDGE_DIR=/app/knowledge_base
       - LANCEDB_DIR=/app/lancedb_data
+      - STT_PREWARM_STATUS_FILE=${STT_PREWARM_STATUS_FILE:-/app/model_cache/stt_prewarm_status.json}
+      - PIPER_PREWARM_STATUS_FILE=${PIPER_PREWARM_STATUS_FILE:-/app/piper_cache/piper_prewarm_status.json}
       - HF_HOME=/app/model_cache/hf
       - XDG_CACHE_HOME=/app/model_cache/xdg
       - UART_ENABLED=${UART_ENABLED:-0}

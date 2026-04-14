@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import json
 import shutil
 import subprocess
 import time
@@ -16,6 +17,7 @@ DEFAULT_MODEL_URL = (
     "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
     "zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx"
 )
+DEFAULT_STATUS_PATH = "/app/piper_cache/piper_prewarm_status.json"
 
 
 def _get_int(name: str, default: int) -> int:
@@ -48,6 +50,18 @@ def _resolve_piper_binary(name_or_path: str) -> str:
         return resolved
 
     raise RuntimeError(f"Piper binary not found: {name_or_path}")
+
+
+def _is_true(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _write_status(status_path: Path, status: dict) -> None:
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    status["timestamp"] = int(time.time())
+    status_path.write_text(json.dumps(status, ensure_ascii=True, indent=2), encoding="utf-8")
 
 
 def _download_with_retry(
@@ -132,6 +146,7 @@ def main() -> None:
 
     model_config_path = Path(os.getenv("PIPER_MODEL_CONFIG", f"{model_path}.json"))
     model_config_url = os.getenv("PIPER_MODEL_CONFIG_URL", f"{model_url}.json")
+    status_path = Path(os.getenv("PIPER_PREWARM_STATUS_FILE", DEFAULT_STATUS_PATH))
 
     max_attempts = _get_int("PIPER_DOWNLOAD_MAX_ATTEMPTS", 5)
     retry_seconds = _get_int("PIPER_DOWNLOAD_RETRY_SECONDS", 2)
@@ -146,12 +161,33 @@ def main() -> None:
 
     LOGGER.info("Running Piper smoke test...")
     _run_smoke_test(piper_bin, model_path, model_config_path)
+    _write_status(
+        status_path,
+        {
+            "ok": True,
+            "component": "piper",
+            "model_path": str(model_path),
+            "config_path": str(model_config_path),
+            "message": "piper prewarm completed",
+        },
+    )
     LOGGER.info("Piper prewarm completed.")
 
 
 if __name__ == "__main__":
+    strict_mode = _is_true(os.getenv("PIPER_PREWARM_STRICT"))
+    status_path = Path(os.getenv("PIPER_PREWARM_STATUS_FILE", DEFAULT_STATUS_PATH))
+
     try:
         main()
     except Exception:  # noqa: BLE001
         LOGGER.exception("Piper prewarm failed")
-        raise SystemExit(1)
+        _write_status(
+            status_path,
+            {
+                "ok": False,
+                "component": "piper",
+                "message": "piper prewarm failed",
+            },
+        )
+        raise SystemExit(1 if strict_mode else 0)

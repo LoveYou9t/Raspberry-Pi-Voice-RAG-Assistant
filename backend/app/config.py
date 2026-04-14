@@ -70,6 +70,12 @@ class Settings:
     piper_model: str = os.getenv("PIPER_MODEL", "/app/piper_cache/zh_CN-huayan-medium.onnx")
     piper_chunk_size: int = _get_int("PIPER_CHUNK_SIZE", 4096)
     piper_use_mock_on_missing: bool = _get_bool("PIPER_USE_MOCK_ON_MISSING", False)
+    stt_prewarm_status_file: str = os.getenv(
+        "STT_PREWARM_STATUS_FILE", "/app/model_cache/stt_prewarm_status.json"
+    )
+    piper_prewarm_status_file: str = os.getenv(
+        "PIPER_PREWARM_STATUS_FILE", "/app/piper_cache/piper_prewarm_status.json"
+    )
 
 
 settings = Settings()

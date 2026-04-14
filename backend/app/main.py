@@ -86,6 +86,41 @@ def _build_tts_status() -> dict[str, str | bool]:
     }
 
 
+def _load_prewarm_status(status_path: str, component: str) -> dict[str, Any]:
+    path = Path(status_path)
+    if not path.exists():
+        return {
+            "component": component,
+            "available": False,
+            "ok": None,
+            "message": "status file not found",
+            "path": status_path,
+        }
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "component": component,
+            "available": False,
+            "ok": False,
+            "message": f"invalid status file: {exc}",
+            "path": status_path,
+        }
+
+    payload.setdefault("component", component)
+    payload["available"] = True
+    payload["path"] = status_path
+    return payload
+
+
+def _build_prewarm_status() -> dict[str, Any]:
+    return {
+        "stt": _load_prewarm_status(settings.stt_prewarm_status_file, "stt"),
+        "piper": _load_prewarm_status(settings.piper_prewarm_status_file, "piper"),
+    }
+
+
 def _build_uart_status() -> dict[str, Any]:
     if not settings.uart_enabled:
         return {
@@ -241,6 +276,11 @@ async def on_startup() -> None:
         tts_status["piper_model_exists"],
         tts_status["piper_mock_allowed"],
     )
+    logger.info(
+        "Startup summary | prewarm_status_files stt=%s piper=%s",
+        settings.stt_prewarm_status_file,
+        settings.piper_prewarm_status_file,
+    )
 
     if settings.uart_enabled:
         uart_gateway = UartGateway(
@@ -284,6 +324,7 @@ async def root() -> dict[str, Any]:
 async def healthz() -> dict[str, Any]:
     tts_status = _build_tts_status()
     uart_status = _build_uart_status()
+    prewarm_status = _build_prewarm_status()
     status = "ok" if tts_status["tts_mode"] != "unavailable" else "degraded"
     return {
         "status": status,
@@ -292,6 +333,7 @@ async def healthz() -> dict[str, Any]:
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
         "uart": uart_status,
+        "prewarm": prewarm_status,
         **tts_status,
     }
 
