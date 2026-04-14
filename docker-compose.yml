@@ -18,6 +18,9 @@ services:
     image: ollama/ollama:latest
     container_name: edge_ollama_init
     restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
     depends_on:
       ollama_server:
         condition: service_started
@@ -26,43 +29,40 @@ services:
       - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
     volumes:
       - ./ollama_data:/root/.ollama
-    command:
-      - /bin/sh
-      - -c
-      - |
-        wait_count=0
-        until ollama list >/dev/null 2>&1; do
-          wait_count=$((wait_count + 1))
-          if [ "$wait_count" -ge 90 ]; then
-            echo "Warning: Ollama service did not become ready in time."
-            echo "Continue startup; model pull can be retried manually later."
-            exit 0
-          fi
-          echo "Waiting for Ollama service..."
-          sleep 2
-        done
-
-        if ollama show "${LLM_MODEL}" >/dev/null 2>&1; then
-          echo "Model already present: ${LLM_MODEL}"
+    command: |
+      wait_count=0
+      until ollama list >/dev/null 2>&1; do
+        wait_count=$((wait_count + 1))
+        if [ "$wait_count" -ge 90 ]; then
+          echo "Warning: Ollama service did not become ready in time."
+          echo "Continue startup; model pull can be retried manually later."
           exit 0
         fi
+        echo "Waiting for Ollama service..."
+        sleep 2
+      done
 
-        attempt=1
-        max_attempts=5
-        while [ "$attempt" -le "$max_attempts" ]; do
-          if ollama pull "${LLM_MODEL}"; then
-            echo "Model pull completed: ${LLM_MODEL}"
-            exit 0
-          fi
-          echo "Model pull failed (attempt ${attempt}/${max_attempts}): ${LLM_MODEL}"
-          attempt=$((attempt + 1))
-          sleep 5
-        done
-
-        echo "Warning: failed to prewarm ${LLM_MODEL}."
-        echo "Continue startup; run this command later if needed:"
-        echo "docker exec edge_ollama ollama pull ${LLM_MODEL}"
+      if ollama show "${LLM_MODEL}" >/dev/null 2>&1; then
+        echo "Model already present: ${LLM_MODEL}"
         exit 0
+      fi
+
+      attempt=1
+      max_attempts=5
+      while [ "$attempt" -le "$max_attempts" ]; do
+        if ollama pull "${LLM_MODEL}"; then
+          echo "Model pull completed: ${LLM_MODEL}"
+          exit 0
+        fi
+        echo "Model pull failed (attempt ${attempt}/${max_attempts}): ${LLM_MODEL}"
+        attempt=$((attempt + 1))
+        sleep 5
+      done
+
+      echo "Warning: failed to prewarm ${LLM_MODEL}."
+      echo "Continue startup; run this command later if needed:"
+      echo "docker exec edge_ollama ollama pull ${LLM_MODEL}"
+      exit 0
 
   stt_init:
     build:
