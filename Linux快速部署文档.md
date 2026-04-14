@@ -161,7 +161,7 @@
    docker compose logs -f ollama_init
    docker compose logs -f stt_init
 11. 出现 `service "ollama_init" didn't complete successfully: exit 1`：
-   请先更新代码后重建（新版已增加重试并避免预热失败阻断启动）：
+   这通常说明本地仍在使用旧版 compose（新版已将 `ollama_init` 设为非阻断）。请先更新代码后重建：
    git pull --rebase
    docker compose down --remove-orphans
    docker compose up -d --build
