@@ -41,17 +41,21 @@
    docker compose up -d --build
 2. 查看容器状态：
    docker compose ps
-3. 首次启动会自动预热 `llama3.2:3b` 与 `faster-whisper tiny`，耗时会更长。
+3. 首次启动会自动预热 `llama3.2:3b`、`faster-whisper tiny`，并自动下载/校验 Piper 模型，耗时会更长。
 4. 启动成功时，关键容器状态一般为：
    edge_ollama、edge_fastapi、edge_frontend 为 Up；
-   edge_ollama_init、edge_stt_init 为 Exited (0)。
+   edge_ollama_init、edge_stt_init、edge_piper_init 为 Exited (0)。
 
 ## 5. 模型预热检查（自动）
 
 1. 查看 Ollama 模型列表：
    docker exec edge_ollama ollama list
-2. 查看后端健康检查（确认 STT/LLM 配置）：
+2. 查看 Piper 预热日志：
+   docker compose logs -f piper_init
+3. 查看后端健康检查（确认 STT/LLM/TTS 配置）：
    curl <http://127.0.0.1:8000/healthz>
+4. 在健康检查结果中确认以下字段：
+   `tts_mode=real`、`piper_bin_found=true`、`piper_model_exists=true`
 
 ## 6. 验证服务
 
@@ -150,6 +154,16 @@
    docker compose up -d --build
    如需查看具体原因：
    docker compose logs -f stt_init
+13. 出现 `service "piper_init" didn't complete successfully: exit 1`：
+   先检查模型下载与二进制日志：
+   docker compose logs -f piper_init
+   如果是网络问题，可在 `.env` 中替换 `PIPER_MODEL_URL` 与 `PIPER_MODEL_CONFIG_URL` 到可访问镜像地址后重试：
+   docker compose up -d --build
+14. `healthz` 返回 `tts_mode=unavailable` 或 `status=degraded`：
+   说明 Piper 二进制或模型不可用。请依次检查：
+   docker compose logs -f piper_init
+   docker compose logs -f fastapi_backend
+   确认容器内存在模型文件路径（默认 `/app/piper_cache/zh_CN-huayan-medium.onnx`）。
 
 ## 10. 开机自动恢复（可选）
 

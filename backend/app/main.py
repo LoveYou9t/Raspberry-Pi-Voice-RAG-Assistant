@@ -4,7 +4,9 @@ import asyncio
 import contextlib
 import json
 import logging
+import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -57,6 +59,28 @@ class SessionState:
 
 
 app = FastAPI(title="Edge Voice RAG Gateway", version="0.1.0")
+
+
+def _build_tts_status() -> dict[str, str | bool]:
+    piper_bin_path = shutil.which(settings.piper_bin) or ""
+    piper_bin_found = bool(piper_bin_path)
+    piper_model_exists = Path(settings.piper_model).exists()
+
+    if piper_bin_found and piper_model_exists:
+        tts_mode = "real"
+    elif settings.piper_use_mock_on_missing:
+        tts_mode = "mock"
+    else:
+        tts_mode = "unavailable"
+
+    return {
+        "piper_bin_found": piper_bin_found,
+        "piper_bin_path": piper_bin_path or "missing",
+        "piper_model": settings.piper_model,
+        "piper_model_exists": piper_model_exists,
+        "piper_mock_allowed": settings.piper_use_mock_on_missing,
+        "tts_mode": tts_mode,
+    }
 
 
 def _clear_queue(queue_obj: asyncio.Queue) -> None:
@@ -170,6 +194,25 @@ async def _shutdown_session(state: SessionState) -> None:
     await asyncio.to_thread(state.tts_service.shutdown)
 
 
+@app.on_event("startup")
+async def on_startup() -> None:
+    tts_status = _build_tts_status()
+    logger.info(
+        "Startup summary | llm_model=%s stt_model=%s rag_mode=%s",
+        settings.llm_model,
+        settings.stt_model,
+        rag_service.mode,
+    )
+    logger.info(
+        "Startup summary | tts_mode=%s piper_bin=%s piper_model=%s model_exists=%s mock_allowed=%s",
+        tts_status["tts_mode"],
+        tts_status["piper_bin_path"],
+        tts_status["piper_model"],
+        tts_status["piper_model_exists"],
+        tts_status["piper_mock_allowed"],
+    )
+
+
 @app.get("/")
 async def root() -> dict[str, str]:
     return {
@@ -180,13 +223,16 @@ async def root() -> dict[str, str]:
 
 
 @app.get("/healthz")
-async def healthz() -> dict[str, str]:
+async def healthz() -> dict[str, str | bool]:
+    tts_status = _build_tts_status()
+    status = "ok" if tts_status["tts_mode"] != "unavailable" else "degraded"
     return {
-        "status": "ok",
+        "status": status,
         "stt_backend": stt_service.backend,
         "stt_model": settings.stt_model,
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
+        **tts_status,
     }
 
 

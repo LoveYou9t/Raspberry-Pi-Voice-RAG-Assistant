@@ -11,3 +11,6 @@ ollama_data/*
 
 lancedb_data/*
 !lancedb_data/.gitkeep
+
+piper_cache/*
+!piper_cache/.gitkeep

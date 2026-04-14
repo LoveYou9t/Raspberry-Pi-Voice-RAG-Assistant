@@ -59,9 +59,9 @@ class Settings:
     vector_dim: int = _get_int("VECTOR_DIM", 384)
 
     piper_bin: str = os.getenv("PIPER_BIN", "piper")
-    piper_model: str = os.getenv("PIPER_MODEL", "zh_CN-huayan-medium.onnx")
+    piper_model: str = os.getenv("PIPER_MODEL", "/app/piper_cache/zh_CN-huayan-medium.onnx")
     piper_chunk_size: int = _get_int("PIPER_CHUNK_SIZE", 4096)
-    piper_use_mock_on_missing: bool = _get_bool("PIPER_USE_MOCK_ON_MISSING", True)
+    piper_use_mock_on_missing: bool = _get_bool("PIPER_USE_MOCK_ON_MISSING", False)
 
 
 settings = Settings()
