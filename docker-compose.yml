@@ -103,7 +103,11 @@ services:
     environment:
       - PIPER_MODEL=${PIPER_MODEL:-/app/piper_cache/zh_CN-huayan-medium.onnx}
       - PIPER_MODEL_URL=${PIPER_MODEL_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx}
+      - PIPER_MODEL_FALLBACK_URLS=${PIPER_MODEL_FALLBACK_URLS:-}
       - PIPER_MODEL_CONFIG_URL=${PIPER_MODEL_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json}
+      - PIPER_MODEL_CONFIG_FALLBACK_URLS=${PIPER_MODEL_CONFIG_FALLBACK_URLS:-}
+      - PIPER_DOWNLOAD_TRUST_ENV=${PIPER_DOWNLOAD_TRUST_ENV:-0}
+      - PIPER_DOWNLOAD_LOCAL_ADDRESS=${PIPER_DOWNLOAD_LOCAL_ADDRESS:-0.0.0.0}
       - PIPER_PREWARM_STRICT=${PIPER_PREWARM_STRICT:-0}
       - PIPER_PREWARM_STATUS_FILE=${PIPER_PREWARM_STATUS_FILE:-/app/piper_cache/piper_prewarm_status.json}
     volumes:

@@ -8,3 +8,4 @@ lancedb==0.18.0
 pyarrow==18.1.0
 pandas==2.2.3
 pyserial==3.5
+requests==2.32.3

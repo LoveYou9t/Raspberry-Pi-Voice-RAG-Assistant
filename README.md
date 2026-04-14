@@ -27,6 +27,8 @@ docker compose up -d --build
 若 piper_init 失败，服务会继续启动，但 TTS 可能降级或不可用；请查看 piper_init 日志定位原因。
 默认采用非阻断预热策略（`STT_PREWARM_STRICT=0`、`PIPER_PREWARM_STRICT=0`），可避免 init 退出码反复阻断服务。
 `*_init` 容器是一次性任务，看到 Exited 不代表主服务未启动，请以 `edge_fastapi`/`edge_frontend` 的 Up 状态和 `/healthz` 结果为准。
+若日志出现 `No module named 'requests'`，需要重新构建后端镜像以拉取新增依赖：`docker compose build --no-cache fastapi_backend`。
+若 Piper 下载报 `Errno 99`，可使用 `.env` 中的 `PIPER_MODEL_FALLBACK_URLS`、`PIPER_MODEL_CONFIG_FALLBACK_URLS`，并保持 `PIPER_DOWNLOAD_LOCAL_ADDRESS=0.0.0.0`。
 
 可选预热脚本：
 
