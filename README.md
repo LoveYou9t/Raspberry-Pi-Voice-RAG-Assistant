@@ -15,6 +15,7 @@
 ## 快速开始
 
 1. 编辑 `.env` 调整模型与阈值（默认 `LLM_MODEL=llama3.2:3b`、`STT_MODEL=tiny`、`PIPER_USE_MOCK_ON_MISSING=0`）。
+   若网络不稳定，建议同时确认 Python 包索引：`PIP_INDEX_URL` 与 `PIP_FALLBACK_INDEX_URL`。
 2. 准备知识库文件到 `knowledge_base/`。
 3. 启动：
 
@@ -60,14 +61,14 @@ UART_AUDIO_CODEC=ulaw8k
 UART_DEVICE_SAMPLE_RATE=8000
 ```
 
-2. 在树莓派主机上开启容器设备透传（取消 [docker-compose.yml](docker-compose.yml) 中 `fastapi_backend` 的 `devices` 注释）。
-3. 重启服务：
+1. 在树莓派主机上开启容器设备透传（取消 [docker-compose.yml](docker-compose.yml) 中 `fastapi_backend` 的 `devices` 注释）。
+1. 重启服务：
 
 ```bash
 docker compose up -d --build
 ```
 
-4. 查看健康状态：
+1. 查看健康状态：
 
 ```bash
 curl http://localhost:8000/healthz
