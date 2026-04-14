@@ -44,7 +44,7 @@
 3. 首次启动会自动预热 `llama3.2:3b`、`faster-whisper tiny`，并自动下载/校验 Piper 模型，耗时会更长。
 4. 启动成功时，关键容器状态一般为：
    edge_ollama、edge_fastapi、edge_frontend 为 Up；
-   edge_ollama_init、edge_stt_init、edge_piper_init 为 Exited (0)。
+   edge_ollama_init、edge_stt_init、edge_piper_init 为 Exited（0 或 1 都可能，均不再阻断主服务启动）。
 
 ## 5. 模型预热检查（自动）
 

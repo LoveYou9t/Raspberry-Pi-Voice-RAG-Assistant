@@ -130,7 +130,7 @@ services:
       ollama_init:
         condition: service_started
       stt_init:
-        condition: service_completed_successfully
+        condition: service_started
       piper_init:
         condition: service_started
     env_file:
