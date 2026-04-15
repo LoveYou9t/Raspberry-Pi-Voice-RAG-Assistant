@@ -62,12 +62,12 @@
 
 1. 确认 `.env` 包含以下参数：
    STT_PROVIDER=whisper_cpp
-   STT_CPP_MODEL_PATH=/app/model_cache/models/whisper-small-q5_0.gguf
+   STT_CPP_MODEL_PATH=/app/model_cache/models/ggml-small-q5_0.bin
    STT_CPP_QUANT=q5_0
    STT_CPP_BIN=/app/whisper.cpp/whisper-cli
    STT_CPP_FALLBACK_TO_FASTER=1
 2. 将量化模型放到仓库目录：
-   whisper_cache/models/whisper-small-q5_0.gguf
+   whisper_cache/models/ggml-small-q5_0.bin
 3. 重建并启动：
    docker compose up -d --build
 4. 通过健康检查确认 STT 运行后端：
@@ -76,6 +76,8 @@
 5. 如果你需要临时切回 Faster-Whisper：
    STT_PROVIDER=faster_whisper
    docker compose up -d --build
+
+提示：若 `llama3.2:3b` 没有就绪，请先检查 `ollama_models/` 目录是否包含 `.env` 中 `OLLAMA_LOCAL_MODEL_PATH` 对应的本地 GGUF；如果本地文件不存在，则需要联网让 `ollama_init` 自动拉取模型。
 
 ## 6. 验证服务
 

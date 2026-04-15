@@ -56,18 +56,20 @@ curl http://localhost:8000/healthz
 
 默认 STT 路由为 whisper.cpp，量化等级为 q5_0。请确保模型文件已放到容器挂载目录中：
 
-- 主机路径：`whisper_cache/models/whisper-small-q5_0.gguf`
-- 容器路径：`/app/model_cache/models/whisper-small-q5_0.gguf`
+- 主机路径：`whisper_cache/models/ggml-small-q5_0.bin`
+- 容器路径：`/app/model_cache/models/ggml-small-q5_0.bin`
 
 关键环境变量（`.env`）：
 
 ```bash
 STT_PROVIDER=whisper_cpp
-STT_CPP_MODEL_PATH=/app/model_cache/models/whisper-small-q5_0.gguf
+STT_CPP_MODEL_PATH=/app/model_cache/models/ggml-small-q5_0.bin
 STT_CPP_QUANT=q5_0
 STT_CPP_BIN=/app/whisper.cpp/whisper-cli
 STT_CPP_FALLBACK_TO_FASTER=1
 ```
+
+若 `llama3.2:3b` 未就绪，请先确认 `ollama_models/` 下是否存在 `.env` 指定的本地 GGUF 文件（默认 `Llama-3.2-3B-Instruct-Q4_K_M.gguf`）；若没有本地文件，需要保证目标机器可联网以便 `ollama pull` 完成预热。
 
 如果你临时要切回 Faster-Whisper，可设置：
 

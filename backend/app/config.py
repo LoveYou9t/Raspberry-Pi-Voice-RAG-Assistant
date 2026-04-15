@@ -58,7 +58,7 @@ class Settings:
     stt_compute_type: str = os.getenv("STT_COMPUTE_TYPE", "int8")
     stt_cpp_bin: str = os.getenv("STT_CPP_BIN", "/app/whisper.cpp/whisper-cli")
     stt_cpp_model_path: str = os.getenv(
-        "STT_CPP_MODEL_PATH", "/app/model_cache/models/whisper-small-q5_0.gguf"
+        "STT_CPP_MODEL_PATH", "/app/model_cache/models/ggml-small-q5_0.bin"
     )
     stt_cpp_quant: str = os.getenv("STT_CPP_QUANT", "q5_0")
     stt_cpp_threads: int = _get_int("STT_CPP_THREADS", 4)

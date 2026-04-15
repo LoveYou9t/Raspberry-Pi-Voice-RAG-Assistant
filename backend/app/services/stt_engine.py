@@ -42,6 +42,43 @@ def _resolve_binary(name_or_path: str, alternatives: tuple[str, ...]) -> str | N
     return None
 
 
+def _resolve_whisper_cpp_model_path(model_path: str, quantization: str) -> Path:
+    requested = Path(model_path)
+    if requested.exists():
+        return requested
+
+    quant = quantization.strip().lower()
+    candidate_names = [
+        f"ggml-small-{quant}.bin",
+        f"ggml-small-{quant}.gguf",
+        f"whisper-small-{quant}.gguf",
+        f"whisper-small-{quant}.bin",
+    ]
+
+    candidate_dirs: list[Path] = []
+    if str(requested.parent) and str(requested.parent) != ".":
+        candidate_dirs.append(requested.parent)
+    candidate_dirs.extend(
+        [
+            Path("/app/model_cache/models"),
+            Path("/app/model_cache"),
+            Path("./whisper_cache/models"),
+        ]
+    )
+
+    seen_dirs: set[Path] = set()
+    for directory in candidate_dirs:
+        if directory in seen_dirs:
+            continue
+        seen_dirs.add(directory)
+        for candidate_name in candidate_names:
+            candidate_path = directory / candidate_name
+            if candidate_path.exists():
+                return candidate_path
+
+    return requested
+
+
 class _BaseProvider:
     provider_name = "mock"
     backend_name = "mock"
@@ -131,7 +168,8 @@ class _WhisperCppProvider(_BaseProvider):
     ) -> None:
         super().__init__()
         self.requested_binary = binary
-        self.model_path = Path(model_path)
+        self.requested_model_path = Path(model_path)
+        self.model_path = _resolve_whisper_cpp_model_path(model_path, quantization)
         self.quantization = quantization
         self.threads = max(1, threads)
         self.language = language
@@ -151,7 +189,16 @@ class _WhisperCppProvider(_BaseProvider):
             errors.append(f"whisper.cpp binary not found: {binary}")
 
         if not self.model_path.exists():
-            errors.append(f"whisper.cpp model not found: {self.model_path}")
+            errors.append(
+                "whisper.cpp model not found: "
+                f"requested={self.requested_model_path} resolved={self.model_path}"
+            )
+        elif self.model_path != self.requested_model_path:
+            logger.info(
+                "whisper.cpp model path fallback: requested=%s resolved=%s",
+                self.requested_model_path,
+                self.model_path,
+            )
 
         self.quant_match = self.quantization.lower() in self.model_path.name.lower()
         if self.model_path.exists() and not self.quant_match:
@@ -230,6 +277,7 @@ class _WhisperCppProvider(_BaseProvider):
         payload.update(
             {
                 "model": str(self.model_path),
+                "requested_model": str(self.requested_model_path),
                 "binary": self.binary_path or "missing",
                 "quantization": self.quantization,
                 "quant_match": self.quant_match,
@@ -252,7 +300,7 @@ class STTService:
         provider: str = "faster_whisper",
         compute_type: str = "int8",
         whisper_cpp_bin: str = "/app/whisper.cpp/whisper-cli",
-        whisper_cpp_model_path: str = "/app/model_cache/models/whisper-small-q5_0.gguf",
+        whisper_cpp_model_path: str = "/app/model_cache/models/ggml-small-q5_0.bin",
         whisper_cpp_quantization: str = "q5_0",
         whisper_cpp_threads: int = 4,
         whisper_cpp_language: str = "zh",

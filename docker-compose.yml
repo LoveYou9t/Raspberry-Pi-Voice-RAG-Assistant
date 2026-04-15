@@ -103,7 +103,7 @@ services:
       - STT_MODEL=${STT_MODEL:-/app/model_cache/models/faster-whisper-tiny}
       - STT_COMPUTE_TYPE=${STT_COMPUTE_TYPE:-int8}
       - STT_CPP_BIN=${STT_CPP_BIN:-/app/whisper.cpp/whisper-cli}
-      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/whisper-small-q5_0.gguf}
+      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/ggml-small-q5_0.bin}
       - STT_CPP_QUANT=${STT_CPP_QUANT:-q5_0}
       - STT_CPP_THREADS=${STT_CPP_THREADS:-4}
       - STT_CPP_LANGUAGE=${STT_CPP_LANGUAGE:-zh}
@@ -174,7 +174,7 @@ services:
       - STT_MODEL=${STT_MODEL:-/app/model_cache/models/faster-whisper-tiny}
       - STT_COMPUTE_TYPE=${STT_COMPUTE_TYPE:-int8}
       - STT_CPP_BIN=${STT_CPP_BIN:-/app/whisper.cpp/whisper-cli}
-      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/whisper-small-q5_0.gguf}
+      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/ggml-small-q5_0.bin}
       - STT_CPP_QUANT=${STT_CPP_QUANT:-q5_0}
       - STT_CPP_THREADS=${STT_CPP_THREADS:-4}
       - STT_CPP_LANGUAGE=${STT_CPP_LANGUAGE:-zh}

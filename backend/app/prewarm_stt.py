@@ -58,6 +58,41 @@ def _resolve_whisper_cpp_binary(name_or_path: str) -> str:
     raise RuntimeError(f"whisper.cpp binary not found: {name_or_path}")
 
 
+def _resolve_whisper_cpp_model_path(model_path: Path, quantization: str) -> Path:
+    if model_path.exists():
+        return model_path
+
+    quant = quantization.strip().lower()
+    candidate_names = [
+        f"ggml-small-{quant}.bin",
+        f"ggml-small-{quant}.gguf",
+        f"whisper-small-{quant}.gguf",
+        f"whisper-small-{quant}.bin",
+    ]
+    candidate_dirs = [
+        model_path.parent,
+        Path("/app/model_cache/models"),
+        Path("/app/model_cache"),
+        Path("./whisper_cache/models"),
+    ]
+
+    seen_dirs: set[Path] = set()
+    for directory in candidate_dirs:
+        if directory in seen_dirs:
+            continue
+        seen_dirs.add(directory)
+        for candidate_name in candidate_names:
+            candidate_path = directory / candidate_name
+            if candidate_path.exists():
+                print(
+                    "whisper.cpp model path fallback "
+                    f"requested={model_path} resolved={candidate_path}"
+                )
+                return candidate_path
+
+    return model_path
+
+
 def _write_silence_wav(path: Path, sample_rate: int = 16000, duration_seconds: float = 0.6) -> None:
     frame_count = max(1, int(sample_rate * duration_seconds))
     silence = b"\x00\x00" * frame_count
@@ -81,8 +116,9 @@ def _prewarm_whisper_cpp(
     language: str,
     threads: int,
     quantization: str,
-) -> None:
+) -> Path:
     binary_path = _resolve_whisper_cpp_binary(binary_name_or_path)
+    model_path = _resolve_whisper_cpp_model_path(model_path, quantization)
     if not model_path.exists():
         raise RuntimeError(f"whisper.cpp model not found: {model_path}")
 
@@ -129,6 +165,8 @@ def _prewarm_whisper_cpp(
         if not text_path.exists():
             raise RuntimeError(f"whisper.cpp smoke test output missing: {text_path}")
 
+    return model_path
+
 
 def main() -> int:
     model_name = os.getenv("STT_MODEL", "tiny")
@@ -136,7 +174,7 @@ def main() -> int:
     compute_type = os.getenv("STT_COMPUTE_TYPE", "int8")
     stt_cpp_bin = os.getenv("STT_CPP_BIN", "/app/whisper.cpp/whisper-cli")
     stt_cpp_model_path = Path(
-        os.getenv("STT_CPP_MODEL_PATH", "/app/model_cache/models/whisper-small-q5_0.gguf")
+        os.getenv("STT_CPP_MODEL_PATH", "/app/model_cache/models/ggml-small-q5_0.bin")
     )
     stt_cpp_quant = os.getenv("STT_CPP_QUANT", "q5_0")
     stt_cpp_threads = int(os.getenv("STT_CPP_THREADS", "4") or "4")
@@ -151,10 +189,11 @@ def main() -> int:
     ok = False
 
     print(f"Prewarming STT provider: {provider}")
+    resolved_whisper_cpp_model_path = stt_cpp_model_path
 
     try:
         if provider == "whisper_cpp":
-            _prewarm_whisper_cpp(
+            resolved_whisper_cpp_model_path = _prewarm_whisper_cpp(
                 binary_name_or_path=stt_cpp_bin,
                 model_path=stt_cpp_model_path,
                 language=stt_cpp_language,
@@ -205,7 +244,8 @@ def main() -> int:
             "backend": active_backend,
             "model": model_name,
             "compute_type": compute_type,
-            "whisper_cpp_model": str(stt_cpp_model_path),
+            "whisper_cpp_model": str(resolved_whisper_cpp_model_path),
+            "whisper_cpp_requested_model": str(stt_cpp_model_path),
             "whisper_cpp_quant": stt_cpp_quant,
             "message": message,
         },
