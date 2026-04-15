@@ -1,4 +1,26 @@
-FROM python:3.11-slim
+ARG PYTHON_BASE_IMAGE=python:3.11-slim
+
+FROM ${PYTHON_BASE_IMAGE} AS whisper_cpp_builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git cmake build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+        git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp; \
+        cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release; \
+        cmake --build /tmp/whisper.cpp/build --config Release -j"$(nproc)"; \
+        if [ -f /tmp/whisper.cpp/build/bin/whisper-cli ]; then \
+            cp /tmp/whisper.cpp/build/bin/whisper-cli /tmp/whisper-cli; \
+        elif [ -f /tmp/whisper.cpp/build/bin/main ]; then \
+            cp /tmp/whisper.cpp/build/bin/main /tmp/whisper-cli; \
+        else \
+            echo "whisper.cpp CLI binary not found"; \
+            exit 1; \
+        fi; \
+        chmod +x /tmp/whisper-cli
+
+FROM ${PYTHON_BASE_IMAGE}
 
 WORKDIR /app
 
@@ -13,8 +35,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL}
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ffmpeg espeak-ng \
+    && apt-get install -y --no-install-recommends curl ffmpeg espeak-ng ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=whisper_cpp_builder /tmp/whisper-cli /app/whisper.cpp/whisper-cli
 
 COPY requirements.txt /app/requirements.txt
 RUN set -eux; \

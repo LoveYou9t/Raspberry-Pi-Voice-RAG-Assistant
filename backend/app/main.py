@@ -28,6 +28,14 @@ stt_service = STTService(
     min_silence_ms=settings.vad_min_silence_ms,
     threshold=settings.vad_threshold,
     model_name=settings.stt_model,
+    provider=settings.stt_provider,
+    compute_type=settings.stt_compute_type,
+    whisper_cpp_bin=settings.stt_cpp_bin,
+    whisper_cpp_model_path=settings.stt_cpp_model_path,
+    whisper_cpp_quantization=settings.stt_cpp_quant,
+    whisper_cpp_threads=settings.stt_cpp_threads,
+    whisper_cpp_language=settings.stt_cpp_language,
+    whisper_cpp_fallback_to_faster=settings.stt_cpp_fallback_to_faster,
 )
 rag_service = RAGService(
     knowledge_dir=settings.knowledge_dir,
@@ -262,9 +270,12 @@ async def on_startup() -> None:
     global uart_gateway
 
     tts_status = _build_tts_status()
+    stt_status = stt_service.status()
     logger.info(
-        "Startup summary | llm_model=%s stt_model=%s rag_mode=%s",
+        "Startup summary | llm_model=%s stt_provider=%s stt_backend=%s stt_model=%s rag_mode=%s",
         settings.llm_model,
+        settings.stt_provider,
+        stt_status["active_backend"],
         settings.stt_model,
         rag_service.mode,
     )
@@ -325,11 +336,14 @@ async def healthz() -> dict[str, Any]:
     tts_status = _build_tts_status()
     uart_status = _build_uart_status()
     prewarm_status = _build_prewarm_status()
+    stt_status = stt_service.status()
     status = "ok" if tts_status["tts_mode"] != "unavailable" else "degraded"
     return {
         "status": status,
         "stt_backend": stt_service.backend,
+        "stt_provider": settings.stt_provider,
         "stt_model": settings.stt_model,
+        "stt": stt_status,
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
         "uart": uart_status,

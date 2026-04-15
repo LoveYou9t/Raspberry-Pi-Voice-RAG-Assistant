@@ -88,6 +88,30 @@ def _dedupe_urls(urls: Iterable[str]) -> list[str]:
     return result
 
 
+def _build_download_modes(trust_env: bool, local_address: str | None) -> list[tuple[bool, str | None]]:
+    modes: list[tuple[bool, str | None]] = [(trust_env, local_address)]
+
+    # Retry without binding a local address if the initial mode fails.
+    if local_address:
+        modes.append((trust_env, None))
+
+    # Retry with proxy-aware mode for environments where outbound access requires proxy vars.
+    if not trust_env:
+        modes.append((True, local_address))
+        if local_address:
+            modes.append((True, None))
+
+    unique: list[tuple[bool, str | None]] = []
+    seen: set[tuple[bool, str | None]] = set()
+    for mode in modes:
+        if mode in seen:
+            continue
+        seen.add(mode)
+        unique.append(mode)
+
+    return unique
+
+
 def _download_once(
     url: str,
     target_path: Path,
@@ -134,29 +158,44 @@ def _download_with_retry(
     if not urls:
         raise RuntimeError("No download URLs provided")
 
+    modes = _build_download_modes(trust_env, local_address)
     errors: list[str] = []
-    for url in urls:
-        for attempt in range(1, max_attempts + 1):
-            try:
-                LOGGER.info("Downloading %s (attempt %s/%s)", url, attempt, max_attempts)
-                _download_once(
-                    url=url,
-                    target_path=target_path,
-                    timeout_seconds=timeout_seconds,
-                    trust_env=trust_env,
-                    local_address=local_address,
-                )
-                LOGGER.info("Downloaded to %s", target_path)
-                return
-            except Exception as exc:  # noqa: BLE001
-                message = f"url={url} attempt={attempt}/{max_attempts} error={exc}"
-                errors.append(message)
-                LOGGER.warning("Download failed: %s", message)
-                part_file = target_path.with_suffix(target_path.suffix + ".part")
-                if part_file.exists():
-                    part_file.unlink(missing_ok=True)
-                if attempt < max_attempts:
-                    time.sleep(retry_seconds)
+
+    for attempt in range(1, max_attempts + 1):
+        for url in urls:
+            for mode_trust_env, mode_local_address in modes:
+                try:
+                    LOGGER.info(
+                        "Downloading %s (attempt %s/%s, trust_env=%s, local_address=%s)",
+                        url,
+                        attempt,
+                        max_attempts,
+                        mode_trust_env,
+                        mode_local_address or "auto",
+                    )
+                    _download_once(
+                        url=url,
+                        target_path=target_path,
+                        timeout_seconds=timeout_seconds,
+                        trust_env=mode_trust_env,
+                        local_address=mode_local_address,
+                    )
+                    LOGGER.info("Downloaded to %s", target_path)
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    message = (
+                        f"url={url} attempt={attempt}/{max_attempts} "
+                        f"trust_env={mode_trust_env} local_address={mode_local_address or 'auto'} "
+                        f"error={exc}"
+                    )
+                    errors.append(message)
+                    LOGGER.warning("Download failed: %s", message)
+                    part_file = target_path.with_suffix(target_path.suffix + ".part")
+                    if part_file.exists():
+                        part_file.unlink(missing_ok=True)
+
+        if attempt < max_attempts:
+            time.sleep(retry_seconds)
 
     raise RuntimeError("; ".join(errors[-6:]))
 

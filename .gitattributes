@@ -1,0 +1,6 @@
+# Store large model artifacts in Git LFS
+ollama_data/** filter=lfs diff=lfs merge=lfs -text
+ollama_models/*.gguf filter=lfs diff=lfs merge=lfs -text
+piper_cache/*.onnx filter=lfs diff=lfs merge=lfs -text
+piper_cache/*.json filter=lfs diff=lfs merge=lfs -text
+whisper_cache/** filter=lfs diff=lfs merge=lfs -text

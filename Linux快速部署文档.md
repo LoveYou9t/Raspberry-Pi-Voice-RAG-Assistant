@@ -41,7 +41,7 @@
    docker compose up -d --build
 2. 查看容器状态：
    docker compose ps
-3. 首次启动会自动预热 `llama3.2:3b`、`faster-whisper tiny`，并自动下载/校验 Piper 模型，耗时会更长。
+3. 首次启动会自动预热 `llama3.2:3b`、STT（按 `STT_PROVIDER` 选择 whisper.cpp 或 faster-whisper），并自动下载/校验 Piper 模型，耗时会更长。
 4. 启动成功时，关键容器状态一般为：
    edge_ollama、edge_fastapi、edge_frontend 为 Up；
    edge_ollama_init、edge_stt_init、edge_piper_init 为 Exited（0 或 1 都可能，均不再阻断主服务启动）。
@@ -56,7 +56,26 @@
    curl <http://127.0.0.1:8000/healthz>
 4. 在健康检查结果中确认以下字段：
    `tts_mode=real`、`piper_bin_found=true`、`piper_model_exists=true`
-   以及 `prewarm.stt.ok=true`、`prewarm.piper.ok=true`
+   以及 `prewarm.stt.ok=true`、`prewarm.piper.ok=true`。
+
+## 5.1 Whisper.cpp q5_0 手动模型放置（默认 STT）
+
+1. 确认 `.env` 包含以下参数：
+   STT_PROVIDER=whisper_cpp
+   STT_CPP_MODEL_PATH=/app/model_cache/models/whisper-small-q5_0.gguf
+   STT_CPP_QUANT=q5_0
+   STT_CPP_BIN=/app/whisper.cpp/whisper-cli
+   STT_CPP_FALLBACK_TO_FASTER=1
+2. 将量化模型放到仓库目录：
+   whisper_cache/models/whisper-small-q5_0.gguf
+3. 重建并启动：
+   docker compose up -d --build
+4. 通过健康检查确认 STT 运行后端：
+   curl <http://127.0.0.1:8000/healthz>
+   检查 `stt_provider`、`stt_backend`、`stt.active_backend` 字段。
+5. 如果你需要临时切回 Faster-Whisper：
+   STT_PROVIDER=faster_whisper
+   docker compose up -d --build
 
 ## 6. 验证服务
 
@@ -112,7 +131,23 @@
 4. 验证状态：
    docker compose ps
 
-## 10. 快速排障
+## 10. 离线模型打包并随 Git 分发（可选）
+
+当目标机器无法稳定访问外网时，建议先在可联网机器下载 Whisper 和 Piper，再提交到仓库。
+Ollama 的 llama3.2:3b 可以直接使用树莓派上已有的本地模型，不需要 Windows 侧再拉取。
+
+1. 启用 Git LFS：
+   git lfs install
+2. 在项目根目录执行：
+   sh prefetch_models_for_git.sh
+3. 提交模型缓存目录：
+   git add .gitattributes piper_cache whisper_cache
+   git commit -m "chore: add offline whisper and piper models"
+   git push
+
+说明：`prefetch_models_for_git.ps1` 现在只预下载 Whisper 和 Piper，并做基础校验。
+
+## 11. 快速排障
 
 1. Ollama 未就绪：
    docker compose logs -f ollama_server
@@ -209,8 +244,15 @@
 17. `crc_errors` 持续增长：
    说明串口链路噪声或帧配置不匹配。请优先检查：
    波特率是否一致（两端都 115200）、地线是否共地、帧格式是否一致（协议头/CRC）。
+18. 构建时出现 `load metadata for docker.io/library/python:3.11-slim` 或 `failed to fetch anonymous token`：
+   这是基础镜像拉取到 Docker Hub 超时。可先设置镜像候选再重建：
+   `export PYTHON_BASE_IMAGE_CANDIDATES="docker.m.daocloud.io/library/python:3.11-slim,python:3.11-slim"`
+   然后执行：
+   `docker compose build --pull fastapi_backend`
+   若仍失败，可尝试无 `--pull`：
+   `docker compose build fastapi_backend`
 
-## 11. 开机自动恢复（可选）
+## 12. 开机自动恢复（可选）
 
 当前 compose 已配置 restart: always，系统重启后 Docker 服务拉起时会自动恢复容器。
 如果未自动恢复，请手动执行：

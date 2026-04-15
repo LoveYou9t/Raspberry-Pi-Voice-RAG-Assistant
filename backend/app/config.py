@@ -52,7 +52,18 @@ class Settings:
     llm_num_ctx: int = _get_int("LLM_NUM_CTX", 4096)
     llm_temperature: float = _get_float("LLM_TEMPERATURE", 0.3)
     llm_top_k: int = _get_int("LLM_TOP_K", 40)
+
+    stt_provider: str = os.getenv("STT_PROVIDER", "whisper_cpp")
     stt_model: str = os.getenv("STT_MODEL", "tiny")
+    stt_compute_type: str = os.getenv("STT_COMPUTE_TYPE", "int8")
+    stt_cpp_bin: str = os.getenv("STT_CPP_BIN", "/app/whisper.cpp/whisper-cli")
+    stt_cpp_model_path: str = os.getenv(
+        "STT_CPP_MODEL_PATH", "/app/model_cache/models/whisper-small-q5_0.gguf"
+    )
+    stt_cpp_quant: str = os.getenv("STT_CPP_QUANT", "q5_0")
+    stt_cpp_threads: int = _get_int("STT_CPP_THREADS", 4)
+    stt_cpp_language: str = os.getenv("STT_CPP_LANGUAGE", "zh")
+    stt_cpp_fallback_to_faster: bool = _get_bool("STT_CPP_FALLBACK_TO_FASTER", True)
 
     sample_rate: int = _get_int("SAMPLE_RATE", 16000)
     audio_chunk_seconds: float = _get_float("AUDIO_CHUNK_SECONDS", 1.0)

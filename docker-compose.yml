@@ -24,8 +24,10 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama_server:11434
       - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
+      - OLLAMA_LOCAL_MODEL_PATH=${OLLAMA_LOCAL_MODEL_PATH:-}
     volumes:
       - ./ollama_data:/root/.ollama
+      - ./ollama_models:/models:ro
     command:
       - /bin/sh
       - -c
@@ -60,6 +62,22 @@ services:
           exit 0
         fi
 
+        local_model_path="${OLLAMA_LOCAL_MODEL_PATH:-}"
+        if [ -n "$$local_model_path" ] && [ -f "$$local_model_path" ]; then
+          echo "Found local GGUF model: $$local_model_path"
+          tmp_modelfile="/tmp/local-model.Modelfile"
+          printf "FROM %s\n" "$$local_model_path" > "$$tmp_modelfile"
+
+          if ollama create "${LLM_MODEL:-llama3.2:3b}" -f "$$tmp_modelfile"; then
+            echo "Model created from local GGUF: ${LLM_MODEL:-llama3.2:3b}"
+            rm -f "$$tmp_modelfile"
+            exit 0
+          fi
+
+          echo "Warning: failed to create model from local GGUF, fallback to online pull."
+          rm -f "$$tmp_modelfile"
+        fi
+
         for _ in 1 2 3 4 5; do
           if ollama pull "${LLM_MODEL:-llama3.2:3b}"; then
             echo "Model pull completed: ${LLM_MODEL:-llama3.2:3b}"
@@ -81,7 +99,15 @@ services:
     env_file:
       - .env
     environment:
-      - STT_MODEL=${STT_MODEL:-tiny}
+      - STT_PROVIDER=${STT_PROVIDER:-whisper_cpp}
+      - STT_MODEL=${STT_MODEL:-/app/model_cache/models/faster-whisper-tiny}
+      - STT_COMPUTE_TYPE=${STT_COMPUTE_TYPE:-int8}
+      - STT_CPP_BIN=${STT_CPP_BIN:-/app/whisper.cpp/whisper-cli}
+      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/whisper-small-q5_0.gguf}
+      - STT_CPP_QUANT=${STT_CPP_QUANT:-q5_0}
+      - STT_CPP_THREADS=${STT_CPP_THREADS:-4}
+      - STT_CPP_LANGUAGE=${STT_CPP_LANGUAGE:-zh}
+      - STT_CPP_FALLBACK_TO_FASTER=${STT_CPP_FALLBACK_TO_FASTER:-1}
       - STT_PREWARM_STRICT=${STT_PREWARM_STRICT:-0}
       - STT_PREWARM_STATUS_FILE=${STT_PREWARM_STATUS_FILE:-/app/model_cache/stt_prewarm_status.json}
       - HF_HOME=/app/model_cache/hf
@@ -106,8 +132,8 @@ services:
       - PIPER_MODEL_FALLBACK_URLS=${PIPER_MODEL_FALLBACK_URLS:-}
       - PIPER_MODEL_CONFIG_URL=${PIPER_MODEL_CONFIG_URL:-https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json}
       - PIPER_MODEL_CONFIG_FALLBACK_URLS=${PIPER_MODEL_CONFIG_FALLBACK_URLS:-}
-      - PIPER_DOWNLOAD_TRUST_ENV=${PIPER_DOWNLOAD_TRUST_ENV:-0}
-      - PIPER_DOWNLOAD_LOCAL_ADDRESS=${PIPER_DOWNLOAD_LOCAL_ADDRESS:-0.0.0.0}
+      - PIPER_DOWNLOAD_TRUST_ENV=${PIPER_DOWNLOAD_TRUST_ENV:-1}
+      - PIPER_DOWNLOAD_LOCAL_ADDRESS=${PIPER_DOWNLOAD_LOCAL_ADDRESS:-}
       - PIPER_PREWARM_STRICT=${PIPER_PREWARM_STRICT:-0}
       - PIPER_PREWARM_STATUS_FILE=${PIPER_PREWARM_STATUS_FILE:-/app/piper_cache/piper_prewarm_status.json}
     volumes:
@@ -124,6 +150,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
+        - PYTHON_BASE_IMAGE=${PYTHON_BASE_IMAGE:-docker.m.daocloud.io/library/python:3.11-slim}
         - PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.org/simple}
         - PIP_FALLBACK_INDEX_URL=${PIP_FALLBACK_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     container_name: edge_fastapi
@@ -143,6 +170,15 @@ services:
       - OLLAMA_HOST=http://ollama_server:11434
       - KNOWLEDGE_DIR=/app/knowledge_base
       - LANCEDB_DIR=/app/lancedb_data
+      - STT_PROVIDER=${STT_PROVIDER:-whisper_cpp}
+      - STT_MODEL=${STT_MODEL:-/app/model_cache/models/faster-whisper-tiny}
+      - STT_COMPUTE_TYPE=${STT_COMPUTE_TYPE:-int8}
+      - STT_CPP_BIN=${STT_CPP_BIN:-/app/whisper.cpp/whisper-cli}
+      - STT_CPP_MODEL_PATH=${STT_CPP_MODEL_PATH:-/app/model_cache/models/whisper-small-q5_0.gguf}
+      - STT_CPP_QUANT=${STT_CPP_QUANT:-q5_0}
+      - STT_CPP_THREADS=${STT_CPP_THREADS:-4}
+      - STT_CPP_LANGUAGE=${STT_CPP_LANGUAGE:-zh}
+      - STT_CPP_FALLBACK_TO_FASTER=${STT_CPP_FALLBACK_TO_FASTER:-1}
       - STT_PREWARM_STATUS_FILE=${STT_PREWARM_STATUS_FILE:-/app/model_cache/stt_prewarm_status.json}
       - PIPER_PREWARM_STATUS_FILE=${PIPER_PREWARM_STATUS_FILE:-/app/piper_cache/piper_prewarm_status.json}
       - HF_HOME=/app/model_cache/hf

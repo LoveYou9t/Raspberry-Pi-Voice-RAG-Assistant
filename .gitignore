@@ -5,6 +5,7 @@ __pycache__/
 *.log
 
 .env.local
+.model_sources/
 
 ollama_data/*
 !ollama_data/.gitkeep
@@ -14,3 +15,13 @@ lancedb_data/*
 
 piper_cache/*
 !piper_cache/.gitkeep
+
+# Offline model packaging: allow committing model caches.
+!ollama_data/
+!ollama_data/**
+!ollama_models/
+!ollama_models/**
+!piper_cache/
+!piper_cache/**
+!whisper_cache/
+!whisper_cache/**
