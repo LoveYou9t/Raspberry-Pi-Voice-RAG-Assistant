@@ -77,7 +77,11 @@
    STT_PROVIDER=faster_whisper
    docker compose up -d --build
 
-提示：若 `llama3.2:3b` 没有就绪，请先检查 `ollama_models/` 目录是否包含 `.env` 中 `OLLAMA_LOCAL_MODEL_PATH` 对应的本地 GGUF；如果本地文件不存在，则需要联网让 `ollama_init` 自动拉取模型。
+提示：若 `llama3.2:3b` 没有就绪，请先确认导入方式：
+
+- GGUF 本地创建：`ollama_models/` 中应存在 `.env` 的 `OLLAMA_LOCAL_MODEL_PATH` 对应文件，且文件名完全一致。
+- Ollama 标准目录（blobs/manifests）：应放在 `ollama_data/`（容器运行目录）；新版初始化也会尝试从 `ollama_models/.ollama` 自动同步。
+若本地导入未命中，则需要联网让 `ollama_init` 自动拉取模型。
 
 ## 6. 验证服务
 

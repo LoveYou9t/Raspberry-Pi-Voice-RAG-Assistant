@@ -18,7 +18,18 @@ RUN set -eux; \
             echo "whisper.cpp CLI binary not found"; \
             exit 1; \
         fi; \
-        chmod +x /tmp/whisper-cli
+        chmod +x /tmp/whisper-cli; \
+        mkdir -p /tmp/whisper-libs; \
+        find /tmp/whisper.cpp/build \
+            \( -type f -o -type l \) \
+            \( -name 'libwhisper.so*' -o -name 'libggml*.so*' -o -name 'libcommon*.so*' \) \
+            -exec cp -a {} /tmp/whisper-libs/ \;; \
+        if ls /tmp/whisper-libs/libwhisper.so* >/dev/null 2>&1; then \
+            echo "Collected whisper.cpp shared libraries:"; \
+            ls -1 /tmp/whisper-libs; \
+        else \
+            echo "No libwhisper shared library collected; whisper-cli may be statically linked."; \
+        fi
 
 FROM ${PYTHON_BASE_IMAGE}
 
@@ -32,13 +43,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=240 \
     PIP_PROGRESS_BAR=off \
-    PIP_INDEX_URL=${PIP_INDEX_URL}
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    LD_LIBRARY_PATH=/app/whisper.cpp/lib
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ffmpeg espeak-ng ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=whisper_cpp_builder /tmp/whisper-cli /app/whisper.cpp/whisper-cli
+COPY --from=whisper_cpp_builder /tmp/whisper-libs/ /app/whisper.cpp/lib/
 
 COPY requirements.txt /app/requirements.txt
 RUN set -eux; \

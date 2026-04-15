@@ -69,7 +69,12 @@ STT_CPP_BIN=/app/whisper.cpp/whisper-cli
 STT_CPP_FALLBACK_TO_FASTER=1
 ```
 
-若 `llama3.2:3b` 未就绪，请先确认 `ollama_models/` 下是否存在 `.env` 指定的本地 GGUF 文件（默认 `Llama-3.2-3B-Instruct-Q4_K_M.gguf`）；若没有本地文件，需要保证目标机器可联网以便 `ollama pull` 完成预热。
+若 `llama3.2:3b` 未就绪，请先确认你使用的是哪种模型导入方式：
+
+- GGUF 本地创建：`ollama_models/` 下是否存在 `.env` 指定的本地 GGUF 文件（默认 `Llama-3.2-3B-Instruct-Q4_K_M.gguf`），且文件名与 `OLLAMA_LOCAL_MODEL_PATH` 完全一致。
+- Ollama 标准目录（blobs/manifests）：应放在 `ollama_data/`（容器运行目录）。新版初始化也会尝试从 `ollama_models/.ollama` 自动同步。
+
+若本地导入都不满足，则需要保证目标机器可联网以便 `ollama pull` 完成预热。
 
 如果你临时要切回 Faster-Whisper，可设置：
 
@@ -163,7 +168,7 @@ git push
 - `frontend/` 浏览器端采集与播放
 - `knowledge_base/` 挂载知识库目录
 - `lancedb_data/` 向量库持久化目录
-- `ollama_data/` Ollama 模型持久化目录
-- `ollama_models/` 离线 GGUF 模型目录（用于本地创建 Ollama 模型）
+- `ollama_data/` Ollama 运行目录（blobs/manifests，映射到容器 `/root/.ollama`）
+- `ollama_models/` 离线 GGUF 模型目录（仅用于 `OLLAMA_LOCAL_MODEL_PATH` + `ollama create`）
 - `piper_cache/` Piper 模型持久化目录
 - `whisper_cache/` Faster-Whisper 模型缓存目录
