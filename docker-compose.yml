@@ -18,9 +18,7 @@ services:
     image: ollama/ollama:latest
     container_name: edge_ollama_init
     restart: "no"
-    entrypoint:
-      - /bin/sh
-      - -c
+    entrypoint: /bin/sh
     depends_on:
       ollama_server:
         condition: service_started
@@ -31,92 +29,94 @@ services:
     volumes:
       - ./ollama_data:/root/.ollama
       - ./ollama_models:/models:ro
-    command: |
-      set -u
+    command:
+      - -c
+      - |
+        set -u
 
-      if ! command -v ollama >/dev/null 2>&1; then
-        echo "Warning: ollama CLI not found in init container."
-        exit 0
-      fi
-
-      ready=0
-      attempt=0
-      while [ "$$attempt" -lt 90 ]; do
-        if ollama list >/dev/null 2>&1; then
-          ready=1
-          break
+        if ! command -v ollama >/dev/null 2>&1; then
+          echo "Warning: ollama CLI not found in init container."
+          exit 0
         fi
-        attempt=$((attempt + 1))
-        echo "Waiting for Ollama service... ($${attempt}/90)"
-        sleep 2
-      done
 
-      if [ "$$ready" -ne 1 ]; then
-        echo "Warning: Ollama service did not become ready in time."
-        echo "Continue startup; model pull can be retried manually later."
-        exit 0
-      fi
+        ready=0
+        attempt=0
+        while [ "$$attempt" -lt 90 ]; do
+          if ollama list >/dev/null 2>&1; then
+            ready=1
+            break
+          fi
+          attempt=$((attempt + 1))
+          echo "Waiting for Ollama service... ($${attempt}/90)"
+          sleep 2
+        done
 
-      if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
-        echo "Model already present: ${LLM_MODEL:-llama3.2:3b}"
-        exit 0
-      fi
+        if [ "$$ready" -ne 1 ]; then
+          echo "Warning: Ollama service did not become ready in time."
+          echo "Continue startup; model pull can be retried manually later."
+          exit 0
+        fi
 
-      if [ -d /models/.ollama/models ]; then
-        echo "Detected local Ollama runtime store under /models/.ollama, syncing into /root/.ollama..."
-        mkdir -p /root/.ollama
-        if cp -a /models/.ollama/. /root/.ollama/; then
-          if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
-            echo "Model found after syncing local runtime store: ${LLM_MODEL:-llama3.2:3b}"
+        if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
+          echo "Model already present: ${LLM_MODEL:-llama3.2:3b}"
+          exit 0
+        fi
+
+        if [ -d /models/.ollama/models ]; then
+          echo "Detected local Ollama runtime store under /models/.ollama, syncing into /root/.ollama..."
+          mkdir -p /root/.ollama
+          if cp -a /models/.ollama/. /root/.ollama/; then
+            if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
+              echo "Model found after syncing local runtime store: ${LLM_MODEL:-llama3.2:3b}"
+              exit 0
+            fi
+          else
+            echo "Warning: failed to sync /models/.ollama into /root/.ollama"
+          fi
+        fi
+
+        if [ -d /models/models ]; then
+          echo "Detected local Ollama models directory under /models/models, syncing into /root/.ollama/models..."
+          mkdir -p /root/.ollama/models
+          if cp -a /models/models/. /root/.ollama/models/; then
+            if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
+              echo "Model found after syncing /models/models: ${LLM_MODEL:-llama3.2:3b}"
+              exit 0
+            fi
+          else
+            echo "Warning: failed to sync /models/models into /root/.ollama/models"
+          fi
+        fi
+
+        local_model_path="${OLLAMA_LOCAL_MODEL_PATH:-}"
+        if [ -n "$$local_model_path" ] && [ -f "$$local_model_path" ]; then
+          echo "Found local GGUF model: $$local_model_path"
+          tmp_modelfile="/tmp/local-model.Modelfile"
+          printf "FROM %s\n" "$$local_model_path" > "$$tmp_modelfile"
+
+          if ollama create "${LLM_MODEL:-llama3.2:3b}" -f "$$tmp_modelfile"; then
+            echo "Model created from local GGUF: ${LLM_MODEL:-llama3.2:3b}"
+            rm -f "$$tmp_modelfile"
             exit 0
           fi
-        else
-          echo "Warning: failed to sync /models/.ollama into /root/.ollama"
-        fi
-      fi
 
-      if [ -d /models/models ]; then
-        echo "Detected local Ollama models directory under /models/models, syncing into /root/.ollama/models..."
-        mkdir -p /root/.ollama/models
-        if cp -a /models/models/. /root/.ollama/models/; then
-          if ollama show "${LLM_MODEL:-llama3.2:3b}" >/dev/null 2>&1; then
-            echo "Model found after syncing /models/models: ${LLM_MODEL:-llama3.2:3b}"
-            exit 0
-          fi
-        else
-          echo "Warning: failed to sync /models/models into /root/.ollama/models"
-        fi
-      fi
-
-      local_model_path="${OLLAMA_LOCAL_MODEL_PATH:-}"
-      if [ -n "$$local_model_path" ] && [ -f "$$local_model_path" ]; then
-        echo "Found local GGUF model: $$local_model_path"
-        tmp_modelfile="/tmp/local-model.Modelfile"
-        printf "FROM %s\n" "$$local_model_path" > "$$tmp_modelfile"
-
-        if ollama create "${LLM_MODEL:-llama3.2:3b}" -f "$$tmp_modelfile"; then
-          echo "Model created from local GGUF: ${LLM_MODEL:-llama3.2:3b}"
+          echo "Warning: failed to create model from local GGUF, fallback to online pull."
           rm -f "$$tmp_modelfile"
-          exit 0
         fi
 
-        echo "Warning: failed to create model from local GGUF, fallback to online pull."
-        rm -f "$$tmp_modelfile"
-      fi
+        for _ in 1 2 3 4 5; do
+          if ollama pull "${LLM_MODEL:-llama3.2:3b}"; then
+            echo "Model pull completed: ${LLM_MODEL:-llama3.2:3b}"
+            exit 0
+          fi
+          echo "Model pull failed, retrying: ${LLM_MODEL:-llama3.2:3b}"
+          sleep 5
+        done
 
-      for _ in 1 2 3 4 5; do
-        if ollama pull "${LLM_MODEL:-llama3.2:3b}"; then
-          echo "Model pull completed: ${LLM_MODEL:-llama3.2:3b}"
-          exit 0
-        fi
-        echo "Model pull failed, retrying: ${LLM_MODEL:-llama3.2:3b}"
-        sleep 5
-      done
-
-      echo "Warning: failed to prewarm ${LLM_MODEL:-llama3.2:3b}."
-      echo "Continue startup; run this command later if needed:"
-      echo "docker exec edge_ollama ollama pull ${LLM_MODEL:-llama3.2:3b}"
-      exit 0
+        echo "Warning: failed to prewarm ${LLM_MODEL:-llama3.2:3b}."
+        echo "Continue startup; run this command later if needed:"
+        echo "docker exec edge_ollama ollama pull ${LLM_MODEL:-llama3.2:3b}"
+        exit 0
 
   stt_init:
     image: edge_voice_backend:latest
