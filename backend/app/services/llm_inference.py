@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import AsyncGenerator
@@ -19,12 +20,14 @@ class OllamaLLMService:
         num_ctx: int,
         temperature: float,
         top_k: int,
+        keep_alive: str | None = None,
     ) -> None:
         self.host = host.rstrip("/")
         self.model = model
         self.num_ctx = num_ctx
         self.temperature = temperature
         self.top_k = top_k
+        self.keep_alive = (keep_alive or "").strip()
 
     async def stream_tokens(
         self,
@@ -42,6 +45,8 @@ class OllamaLLMService:
                 "top_k": self.top_k,
             },
         }
+        if self.keep_alive:
+            payload["keep_alive"] = self.keep_alive
 
         try:
             async with httpx.AsyncClient(timeout=None) as client:
@@ -63,6 +68,54 @@ class OllamaLLMService:
         except Exception as exc:  # pragma: no cover
             logger.error("LLM stream failed: %s", exc)
             yield "I cannot reach the model service right now."
+
+    async def warmup(
+        self,
+        prompt: str,
+        timeout_seconds: float,
+        retries: int,
+        retry_delay_seconds: float,
+    ) -> tuple[bool, str]:
+        url = f"{self.host}/api/generate"
+        attempts = max(1, retries + 1)
+        last_message = "warmup not attempted"
+
+        for attempt in range(1, attempts + 1):
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": 1,
+                    "num_ctx": self.num_ctx,
+                    "temperature": self.temperature,
+                    "top_k": self.top_k,
+                },
+            }
+            if self.keep_alive:
+                payload["keep_alive"] = self.keep_alive
+
+            try:
+                async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+
+                if data.get("done", True):
+                    message = f"warmup ok (attempt {attempt}/{attempts})"
+                    logger.info("LLM warmup succeeded: %s", message)
+                    return True, message
+
+                last_message = f"warmup incomplete (attempt {attempt}/{attempts})"
+                logger.warning("LLM warmup incomplete: %s", last_message)
+            except Exception as exc:  # pragma: no cover
+                last_message = f"warmup failed (attempt {attempt}/{attempts}): {exc}"
+                logger.warning("LLM warmup failed: %s", last_message)
+
+            if attempt < attempts:
+                await asyncio.sleep(max(0.0, retry_delay_seconds))
+
+        return False, last_message
 
     async def stream_sentences(self, prompt: str, interrupt_event) -> AsyncGenerator[str, None]:
         chunker = SentenceChunker()

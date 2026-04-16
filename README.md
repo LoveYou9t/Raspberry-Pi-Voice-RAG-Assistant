@@ -51,6 +51,28 @@ curl http://localhost:8000/healthz
 ```
 
 `/healthz` 会返回 `stt_provider`、`stt_backend`、`stt` 详情，以及 `prewarm.stt` / `prewarm.piper` 状态字段。
+同时会返回 `llm` 字段，包含：
+
+- `model`、`host`、`keep_alive`
+- `warmup`（`enabled` / `ok` / `message`）
+- `keepalive`（`enabled` / `interval_seconds` / `running` / `last_keepalive_at`）
+
+LLM 保活与启动预热可在 `.env` 配置：
+
+- `LLM_KEEP_ALIVE=24h`
+- `LLM_WARMUP_ON_STARTUP=1`
+- `LLM_WARMUP_PROMPT=你好`
+- `LLM_WARMUP_TIMEOUT_SECONDS=30`
+- `LLM_WARMUP_RETRIES=2`
+- `LLM_WARMUP_RETRY_DELAY_SECONDS=2`
+- `LLM_KEEPALIVE_ENABLED=1`
+- `LLM_KEEPALIVE_INTERVAL_SECONDS=300`
+- `LLM_KEEPALIVE_PROMPT=嗯`
+
+LLM 排障命令：
+
+- `docker exec edge_ollama ollama ps`
+- `docker exec edge_ollama ollama list`
 
 ## Whisper.cpp q5_0 手动模型放置
 

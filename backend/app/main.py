@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import shutil
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,8 +50,16 @@ llm_service = OllamaLLMService(
     num_ctx=settings.llm_num_ctx,
     temperature=settings.llm_temperature,
     top_k=settings.llm_top_k,
+    keep_alive=settings.llm_keep_alive,
 )
 uart_gateway: UartGateway | None = None
+llm_keepalive_task: asyncio.Task | None = None
+llm_warmup_state: dict[str, Any] = {
+    "enabled": settings.llm_warmup_on_startup,
+    "ok": None,
+    "message": "warmup not started",
+    "last_keepalive_at": None,
+}
 
 
 @dataclass
@@ -152,6 +161,43 @@ def _build_uart_status() -> dict[str, Any]:
         }
 
     return uart_gateway.snapshot()
+
+
+def _build_llm_status() -> dict[str, Any]:
+    keepalive_running = llm_keepalive_task is not None and not llm_keepalive_task.done()
+    return {
+        "model": settings.llm_model,
+        "host": settings.ollama_host,
+        "keep_alive": settings.llm_keep_alive,
+        "warmup": {
+            "enabled": llm_warmup_state["enabled"],
+            "ok": llm_warmup_state["ok"],
+            "message": llm_warmup_state["message"],
+        },
+        "keepalive": {
+            "enabled": settings.llm_keepalive_enabled,
+            "interval_seconds": settings.llm_keepalive_interval_seconds,
+            "running": keepalive_running,
+            "last_keepalive_at": llm_warmup_state["last_keepalive_at"],
+            "prompt": settings.llm_keepalive_prompt,
+        },
+    }
+
+
+async def _llm_keepalive_loop() -> None:
+    interval = max(1, settings.llm_keepalive_interval_seconds)
+    while True:
+        await asyncio.sleep(interval)
+        ok, message = await llm_service.warmup(
+            prompt=settings.llm_keepalive_prompt,
+            timeout_seconds=settings.llm_warmup_timeout_seconds,
+            retries=0,
+            retry_delay_seconds=0.0,
+        )
+        llm_warmup_state["last_keepalive_at"] = datetime.now(timezone.utc).isoformat()
+        llm_warmup_state["message"] = f"keepalive {'ok' if ok else 'failed'}: {message}"
+        if not ok:
+            logger.warning("LLM keepalive failed: %s", message)
 
 
 def _clear_queue(queue_obj: asyncio.Queue) -> None:
@@ -267,7 +313,7 @@ async def _shutdown_session(state: SessionState) -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    global uart_gateway
+    global uart_gateway, llm_keepalive_task
 
     tts_status = _build_tts_status()
     stt_status = stt_service.status()
@@ -292,6 +338,31 @@ async def on_startup() -> None:
         settings.stt_prewarm_status_file,
         settings.piper_prewarm_status_file,
     )
+    llm_warmup_state["enabled"] = settings.llm_warmup_on_startup
+    if settings.llm_warmup_on_startup:
+        ok, message = await llm_service.warmup(
+            prompt=settings.llm_warmup_prompt,
+            timeout_seconds=settings.llm_warmup_timeout_seconds,
+            retries=settings.llm_warmup_retries,
+            retry_delay_seconds=settings.llm_warmup_retry_delay_seconds,
+        )
+        llm_warmup_state["ok"] = ok
+        llm_warmup_state["message"] = message
+        logger.info("LLM warmup result | ok=%s message=%s", ok, message)
+    else:
+        llm_warmup_state["ok"] = None
+        llm_warmup_state["message"] = "warmup disabled by config"
+
+    if settings.llm_keepalive_enabled:
+        llm_keepalive_task = asyncio.create_task(_llm_keepalive_loop(), name="llm_keepalive_loop")
+        logger.info(
+            "LLM keepalive started | interval_seconds=%s keep_alive=%s",
+            settings.llm_keepalive_interval_seconds,
+            settings.llm_keep_alive,
+        )
+    else:
+        llm_keepalive_task = None
+        logger.info("LLM keepalive disabled by config")
 
     if settings.uart_enabled:
         uart_gateway = UartGateway(
@@ -315,7 +386,12 @@ async def on_startup() -> None:
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    global uart_gateway
+    global uart_gateway, llm_keepalive_task
+    if llm_keepalive_task is not None:
+        llm_keepalive_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await llm_keepalive_task
+        llm_keepalive_task = None
     if uart_gateway is not None:
         await uart_gateway.stop()
         uart_gateway = None
@@ -346,6 +422,7 @@ async def healthz() -> dict[str, Any]:
         "stt": stt_status,
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
+        "llm": _build_llm_status(),
         "uart": uart_status,
         "prewarm": prewarm_status,
         **tts_status,
