@@ -36,6 +36,11 @@ class Settings:
     app_host: str = os.getenv("APP_HOST", "0.0.0.0")
     app_port: int = _get_int("APP_PORT", 8000)
     ws_path: str = os.getenv("WS_PATH", "/ws/audio-stream")
+    transport_default_mode: str = os.getenv("TRANSPORT_DEFAULT_MODE", "wifi")
+    transport_config_path: str = os.getenv(
+        "TRANSPORT_CONFIG_PATH", "/app/lancedb_data/transport_config.json"
+    )
+    bluetooth_default_port: str = os.getenv("BLUETOOTH_DEFAULT_PORT", "/dev/rfcomm0")
     uart_enabled: bool = _get_bool("UART_ENABLED", False)
     uart_port: str = os.getenv("UART_PORT", "/dev/ttyAMA0")
     uart_baudrate: int = _get_int("UART_BAUDRATE", 115200)

@@ -6,11 +6,12 @@ import json
 import logging
 import shutil
 from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.services.llm_inference import OllamaLLMService
@@ -79,6 +80,220 @@ class SessionState:
 
 
 app = FastAPI(title="Edge Voice RAG Gateway", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SUPPORTED_TRANSPORT_MODES = {"wifi", "bluetooth", "wired"}
+SERIAL_TRANSPORT_MODES = {"bluetooth", "wired"}
+SUPPORTED_AUDIO_CODECS = {"ulaw8k", "pcm16", "pcm16le"}
+transport_config_lock = asyncio.Lock()
+
+
+def _to_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
+def _to_int(value: Any, default: int, minimum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, parsed)
+
+
+def _serial_defaults(port: str) -> dict[str, Any]:
+    return {
+        "port": port,
+        "baudrate": settings.uart_baudrate,
+        "timeout_ms": settings.uart_timeout_ms,
+        "read_size": settings.uart_read_size,
+        "frame_payload_bytes": settings.uart_frame_payload_bytes,
+        "audio_codec": settings.uart_audio_codec,
+        "device_sample_rate": settings.uart_device_sample_rate,
+    }
+
+
+def _default_transport_config() -> dict[str, Any]:
+    default_mode = settings.transport_default_mode.strip().lower() or "wifi"
+    if default_mode not in SUPPORTED_TRANSPORT_MODES:
+        default_mode = "wifi"
+
+    if settings.uart_enabled and default_mode == "wifi":
+        default_mode = "wired"
+
+    enabled = True if default_mode == "wifi" else settings.uart_enabled
+
+    return {
+        "mode": default_mode,
+        "enabled": enabled,
+        "wifi": {"ws_path": settings.ws_path},
+        "bluetooth": _serial_defaults(settings.bluetooth_default_port),
+        "wired": _serial_defaults(settings.uart_port),
+    }
+
+
+def _normalize_serial_config(raw: Any, fallback_port: str) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raw = {}
+
+    codec_raw = str(raw.get("audio_codec", settings.uart_audio_codec)).strip().lower()
+    codec = codec_raw if codec_raw in SUPPORTED_AUDIO_CODECS else settings.uart_audio_codec
+
+    return {
+        "port": str(raw.get("port", fallback_port)).strip() or fallback_port,
+        "baudrate": _to_int(raw.get("baudrate", settings.uart_baudrate), settings.uart_baudrate, 1200),
+        "timeout_ms": _to_int(raw.get("timeout_ms", settings.uart_timeout_ms), settings.uart_timeout_ms, 1),
+        "read_size": _to_int(raw.get("read_size", settings.uart_read_size), settings.uart_read_size, 64),
+        "frame_payload_bytes": _to_int(
+            raw.get("frame_payload_bytes", settings.uart_frame_payload_bytes),
+            settings.uart_frame_payload_bytes,
+            64,
+        ),
+        "audio_codec": codec,
+        "device_sample_rate": _to_int(
+            raw.get("device_sample_rate", settings.uart_device_sample_rate),
+            settings.uart_device_sample_rate,
+            4000,
+        ),
+    }
+
+
+def _normalize_transport_config(raw: Any) -> dict[str, Any]:
+    defaults = _default_transport_config()
+    if not isinstance(raw, dict):
+        raw = {}
+
+    mode = str(raw.get("mode", defaults["mode"]))
+    mode = mode.strip().lower() or defaults["mode"]
+    if mode not in SUPPORTED_TRANSPORT_MODES:
+        mode = defaults["mode"]
+
+    enabled = _to_bool(raw.get("enabled", defaults["enabled"]), defaults["enabled"])
+    wifi_raw = raw.get("wifi", defaults["wifi"])
+    wifi_ws_path = settings.ws_path
+    if isinstance(wifi_raw, dict):
+        wifi_ws_path = str(wifi_raw.get("ws_path", settings.ws_path)).strip() or settings.ws_path
+
+    return {
+        "mode": mode,
+        "enabled": enabled,
+        "wifi": {"ws_path": wifi_ws_path},
+        "bluetooth": _normalize_serial_config(
+            raw.get("bluetooth", defaults["bluetooth"]), settings.bluetooth_default_port
+        ),
+        "wired": _normalize_serial_config(raw.get("wired", defaults["wired"]), settings.uart_port),
+    }
+
+
+def _deep_merge_dict(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in updates.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dict(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load_transport_config() -> dict[str, Any]:
+    path = Path(settings.transport_config_path)
+    if not path.exists():
+        return _default_transport_config()
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to read transport config, fallback to defaults: %s", exc)
+        return _default_transport_config()
+
+    return _normalize_transport_config(payload)
+
+
+def _save_transport_config(config: dict[str, Any]) -> None:
+    path = Path(settings.transport_config_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+transport_config = _load_transport_config()
+
+
+def _serial_runtime_settings(serial_cfg: dict[str, Any]):
+    return replace(
+        settings,
+        uart_enabled=True,
+        uart_port=serial_cfg["port"],
+        uart_baudrate=serial_cfg["baudrate"],
+        uart_timeout_ms=serial_cfg["timeout_ms"],
+        uart_read_size=serial_cfg["read_size"],
+        uart_frame_payload_bytes=serial_cfg["frame_payload_bytes"],
+        uart_audio_codec=serial_cfg["audio_codec"],
+        uart_device_sample_rate=serial_cfg["device_sample_rate"],
+    )
+
+
+async def _stop_uart_gateway() -> None:
+    global uart_gateway
+    if uart_gateway is not None:
+        await uart_gateway.stop()
+        uart_gateway = None
+
+
+async def _apply_transport_config() -> None:
+    global uart_gateway
+
+    mode = transport_config["mode"]
+    enabled = transport_config["enabled"]
+
+    if mode == "wifi" or not enabled:
+        await _stop_uart_gateway()
+        return
+
+    if mode not in SERIAL_TRANSPORT_MODES:
+        await _stop_uart_gateway()
+        return
+
+    serial_cfg = transport_config[mode]
+    runtime_settings = _serial_runtime_settings(serial_cfg)
+
+    await _stop_uart_gateway()
+    gateway = UartGateway(
+        settings=runtime_settings,
+        stt_service=stt_service,
+        rag_service=rag_service,
+        llm_service=llm_service,
+        ingest_threshold_bytes=INGEST_THRESHOLD_BYTES,
+    )
+    await gateway.start()
+    uart_gateway = gateway
+
+
+def _build_transport_status() -> dict[str, Any]:
+    mode = transport_config["mode"]
+    enabled = transport_config["enabled"]
+    gateway_status = uart_gateway.snapshot() if uart_gateway is not None else None
+    return {
+        "mode": mode,
+        "enabled": enabled,
+        "serial_mode": mode in SERIAL_TRANSPORT_MODES,
+        "gateway_running": bool(gateway_status and gateway_status.get("running")),
+        "gateway_connected": bool(gateway_status and gateway_status.get("connected")),
+    }
 
 
 def _build_tts_status() -> dict[str, str | bool]:
@@ -139,14 +354,18 @@ def _build_prewarm_status() -> dict[str, Any]:
 
 
 def _build_uart_status() -> dict[str, Any]:
-    if not settings.uart_enabled:
+    mode = transport_config.get("mode", "wifi")
+    enabled = _to_bool(transport_config.get("enabled", False), False)
+    serial_cfg = transport_config.get(mode, {}) if mode in SERIAL_TRANSPORT_MODES else {}
+
+    if mode not in SERIAL_TRANSPORT_MODES or not enabled:
         return {
             "enabled": False,
             "running": False,
             "connected": False,
-            "port": settings.uart_port,
-            "baudrate": settings.uart_baudrate,
-            "audio_codec": settings.uart_audio_codec,
+            "port": serial_cfg.get("port", settings.uart_port),
+            "baudrate": serial_cfg.get("baudrate", settings.uart_baudrate),
+            "audio_codec": serial_cfg.get("audio_codec", settings.uart_audio_codec),
         }
 
     if uart_gateway is None:
@@ -154,9 +373,9 @@ def _build_uart_status() -> dict[str, Any]:
             "enabled": True,
             "running": False,
             "connected": False,
-            "port": settings.uart_port,
-            "baudrate": settings.uart_baudrate,
-            "audio_codec": settings.uart_audio_codec,
+            "port": serial_cfg.get("port", settings.uart_port),
+            "baudrate": serial_cfg.get("baudrate", settings.uart_baudrate),
+            "audio_codec": serial_cfg.get("audio_codec", settings.uart_audio_codec),
             "last_error": "uart gateway not initialized",
         }
 
@@ -313,7 +532,7 @@ async def _shutdown_session(state: SessionState) -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    global uart_gateway, llm_keepalive_task
+    global llm_keepalive_task, transport_config
 
     tts_status = _build_tts_status()
     stt_status = stt_service.status()
@@ -364,37 +583,27 @@ async def on_startup() -> None:
         llm_keepalive_task = None
         logger.info("LLM keepalive disabled by config")
 
-    if settings.uart_enabled:
-        uart_gateway = UartGateway(
-            settings=settings,
-            stt_service=stt_service,
-            rag_service=rag_service,
-            llm_service=llm_service,
-            ingest_threshold_bytes=INGEST_THRESHOLD_BYTES,
-        )
-        await uart_gateway.start()
-        logger.info(
-            "Startup summary | uart_enabled=%s port=%s baudrate=%s codec=%s",
-            settings.uart_enabled,
-            settings.uart_port,
-            settings.uart_baudrate,
-            settings.uart_audio_codec,
-        )
-    else:
-        logger.info("Startup summary | uart_enabled=%s", settings.uart_enabled)
+    async with transport_config_lock:
+        transport_config = _normalize_transport_config(transport_config)
+        _save_transport_config(transport_config)
+        await _apply_transport_config()
+
+    logger.info(
+        "Startup summary | transport_mode=%s enabled=%s",
+        transport_config["mode"],
+        transport_config["enabled"],
+    )
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    global uart_gateway, llm_keepalive_task
+    global llm_keepalive_task
     if llm_keepalive_task is not None:
         llm_keepalive_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await llm_keepalive_task
         llm_keepalive_task = None
-    if uart_gateway is not None:
-        await uart_gateway.stop()
-        uart_gateway = None
+    await _stop_uart_gateway()
 
 
 @app.get("/")
@@ -403,7 +612,7 @@ async def root() -> dict[str, Any]:
         "service": "edge-voice-rag",
         "status": "running",
         "ws": settings.ws_path,
-        "uart_enabled": settings.uart_enabled,
+        "transport": _build_transport_status(),
     }
 
 
@@ -423,14 +632,53 @@ async def healthz() -> dict[str, Any]:
         "rag_mode": rag_service.mode,
         "llm_model": settings.llm_model,
         "llm": _build_llm_status(),
+        "transport": _build_transport_status(),
         "uart": uart_status,
         "prewarm": prewarm_status,
         **tts_status,
     }
 
 
+@app.get("/api/dashboard/transport")
+async def get_transport_dashboard() -> dict[str, Any]:
+    async with transport_config_lock:
+        return {
+            "config": transport_config,
+            "status": _build_transport_status(),
+            "ws_path": settings.ws_path,
+        }
+
+
+@app.put("/api/dashboard/transport")
+async def update_transport_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
+    global transport_config
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="invalid transport payload")
+
+    async with transport_config_lock:
+        merged = _deep_merge_dict(transport_config, payload)
+        transport_config = _normalize_transport_config(merged)
+        _save_transport_config(transport_config)
+        await _apply_transport_config()
+        return {
+            "config": transport_config,
+            "status": _build_transport_status(),
+            "ws_path": settings.ws_path,
+        }
+
+
 @app.websocket(settings.ws_path)
 async def audio_websocket_endpoint(websocket: WebSocket) -> None:
+    async with transport_config_lock:
+        wifi_enabled = transport_config.get("mode") == "wifi" and _to_bool(transport_config.get("enabled", False), False)
+
+    if not wifi_enabled:
+        await websocket.accept()
+        await websocket.send_text(json.dumps({"event": "error", "message": "wifi transport is disabled"}))
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
 
     tts_service = PiperTTSService(
@@ -457,6 +705,7 @@ async def audio_websocket_endpoint(websocket: WebSocket) -> None:
                 "event": "ready",
                 "sample_rate": settings.sample_rate,
                 "threshold_bytes": INGEST_THRESHOLD_BYTES,
+                "transport_mode": "wifi",
             }
         )
     )

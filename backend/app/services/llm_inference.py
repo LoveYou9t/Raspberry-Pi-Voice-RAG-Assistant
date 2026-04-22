@@ -81,6 +81,7 @@ class OllamaLLMService:
         last_message = "warmup not attempted"
 
         for attempt in range(1, attempts + 1):
+            is_final_attempt = attempt == attempts
             payload = {
                 "model": self.model,
                 "prompt": prompt,
@@ -107,10 +108,16 @@ class OllamaLLMService:
                     return True, message
 
                 last_message = f"warmup incomplete (attempt {attempt}/{attempts})"
-                logger.warning("LLM warmup incomplete: %s", last_message)
+                if is_final_attempt:
+                    logger.warning("LLM warmup incomplete after retries: %s", last_message)
+                else:
+                    logger.info("LLM warmup retrying: %s", last_message)
             except Exception as exc:  # pragma: no cover
                 last_message = f"warmup failed (attempt {attempt}/{attempts}): {exc}"
-                logger.warning("LLM warmup failed: %s", last_message)
+                if is_final_attempt:
+                    logger.warning("LLM warmup failed after retries: %s", last_message)
+                else:
+                    logger.info("LLM warmup retrying: %s", last_message)
 
             if attempt < attempts:
                 await asyncio.sleep(max(0.0, retry_delay_seconds))

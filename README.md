@@ -5,7 +5,8 @@
 ## 功能范围（当前）
 
 - WebSocket 全双工音频传输（上行麦克风 / 下行 PCM）
-- UART 有线半双工语音链路（实验版，支持上行语音与下行 TTS 回传）
+- 统一传输控制（WiFi / Bluetooth Serial / Wired Serial）
+- 串口半双工语音链路（支持上行语音与下行 TTS 回传，可用于蓝牙 RFCOMM 或有线 UART）
 - STT（优先 Whisper.cpp q5_0，失败时自动回退到 Faster-Whisper）
 - RAG 检索（LanceDB 检索，缺失时回退文件检索）
 - LLM 流式生成（Ollama）
@@ -57,6 +58,19 @@ curl http://localhost:8000/healthz
 - `warmup`（`enabled` / `ok` / `message`）
 - `keepalive`（`enabled` / `interval_seconds` / `running` / `last_keepalive_at`）
 
+同时会返回 `transport` 字段，包含：
+
+- `mode`（`wifi` / `bluetooth` / `wired`）
+- `enabled`
+- `serial_mode`
+- `gateway_running`
+- `gateway_connected`
+
+Dashboard 传输配置 API：
+
+- `GET /api/dashboard/transport`：读取当前传输配置与状态
+- `PUT /api/dashboard/transport`：更新配置并热切换链路
+
 LLM 保活与启动预热可在 `.env` 配置：
 
 - `LLM_KEEP_ALIVE=24h`
@@ -73,6 +87,18 @@ LLM 排障命令：
 
 - `docker exec edge_ollama ollama ps`
 - `docker exec edge_ollama ollama list`
+
+## 统一传输 Dashboard
+
+前端页面已升级为统一控制面板，可直接切换和启停传输模式：
+
+- `WiFi`：浏览器 WebSocket 音频链路
+- `Bluetooth Serial`：建议使用 `/dev/rfcomm0`
+- `Wired Serial`：例如 `/dev/ttyUSB0` 或 `/dev/ttyAMA0`
+
+默认配置会落盘到 `TRANSPORT_CONFIG_PATH`（默认 `/app/lancedb_data/transport_config.json`）。
+
+如果启用蓝牙/有线串口，请确认容器已具备对应设备访问权限（`devices` 透传）。
 
 ## Whisper.cpp q5_0 手动模型放置
 

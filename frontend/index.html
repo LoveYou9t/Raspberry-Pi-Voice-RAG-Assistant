@@ -3,35 +3,125 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Edge Voice RAG MVP</title>
+    <title>Edge Voice RAG Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <section class="panel">
-        <h1>Edge Voice RAG</h1>
-        <p class="hint">Full-duplex websocket audio streaming client.</p>
-
-        <label for="wsUrl">WebSocket URL</label>
-        <input id="wsUrl" type="text" value="ws://localhost:8000/ws/audio-stream" />
-
-        <div class="buttons">
-          <button id="connectBtn">Connect + Start Mic</button>
-          <button id="disconnectBtn" class="secondary">Disconnect</button>
-          <button id="interruptBtn" class="danger">Interrupt</button>
+    <div class="bg-glow"></div>
+    <main class="dashboard">
+      <header class="hero">
+        <div>
+          <h1>Edge Voice RAG Transport Dashboard</h1>
+          <p>Switch between WiFi, Bluetooth serial, and wired serial with one control plane.</p>
         </div>
-
-        <div class="status-row">
-          <span>Connection:</span>
-          <strong id="connectionStatus">disconnected</strong>
+        <div class="pill-row">
+          <span id="backendTransportBadge" class="pill neutral">transport: unknown</span>
+          <span id="gatewayBadge" class="pill neutral">gateway: unknown</span>
         </div>
+      </header>
 
-        <div class="status-row">
-          <span>Audio:</span>
-          <strong id="audioStatus">idle</strong>
-        </div>
+      <section class="grid">
+        <article class="card transport-card">
+          <h2>Transport Control</h2>
 
-        <pre id="logs" class="logs"></pre>
+          <label for="apiBase">Backend API Base</label>
+          <input id="apiBase" type="text" value="http://localhost:8000" />
+
+          <div class="inline-controls">
+            <div>
+              <label for="transportMode">Mode</label>
+              <select id="transportMode">
+                <option value="wifi">WiFi</option>
+                <option value="bluetooth">Bluetooth Serial</option>
+                <option value="wired">Wired Serial</option>
+              </select>
+            </div>
+            <div class="toggle-wrap">
+              <label for="transportEnabled">Enabled</label>
+              <input id="transportEnabled" type="checkbox" checked />
+            </div>
+          </div>
+
+          <div id="wifiHint" class="subtle-box">
+            WiFi mode uses WebSocket streaming through the configured backend endpoint.
+          </div>
+
+          <div id="bluetoothConfig" class="serial-block">
+            <h3>Bluetooth Serial</h3>
+            <div class="field-grid">
+              <label>Port <input id="btPort" type="text" placeholder="/dev/rfcomm0" /></label>
+              <label>Baudrate <input id="btBaudrate" type="number" min="1200" /></label>
+              <label>Timeout (ms) <input id="btTimeoutMs" type="number" min="1" /></label>
+              <label>Read Size <input id="btReadSize" type="number" min="64" /></label>
+              <label>Frame Bytes <input id="btFramePayloadBytes" type="number" min="64" /></label>
+              <label>
+                Codec
+                <select id="btAudioCodec">
+                  <option value="ulaw8k">ulaw8k</option>
+                  <option value="pcm16">pcm16</option>
+                  <option value="pcm16le">pcm16le</option>
+                </select>
+              </label>
+              <label>Device Sample Rate <input id="btSampleRate" type="number" min="4000" /></label>
+            </div>
+          </div>
+
+          <div id="wiredConfig" class="serial-block">
+            <h3>Wired Serial</h3>
+            <div class="field-grid">
+              <label>Port <input id="wdPort" type="text" placeholder="/dev/ttyUSB0" /></label>
+              <label>Baudrate <input id="wdBaudrate" type="number" min="1200" /></label>
+              <label>Timeout (ms) <input id="wdTimeoutMs" type="number" min="1" /></label>
+              <label>Read Size <input id="wdReadSize" type="number" min="64" /></label>
+              <label>Frame Bytes <input id="wdFramePayloadBytes" type="number" min="64" /></label>
+              <label>
+                Codec
+                <select id="wdAudioCodec">
+                  <option value="ulaw8k">ulaw8k</option>
+                  <option value="pcm16">pcm16</option>
+                  <option value="pcm16le">pcm16le</option>
+                </select>
+              </label>
+              <label>Device Sample Rate <input id="wdSampleRate" type="number" min="4000" /></label>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="saveTransportBtn">Apply Transport</button>
+            <button id="reloadTransportBtn" class="secondary">Reload</button>
+          </div>
+
+          <div class="status-list">
+            <div><span>Runtime Mode</span><strong id="runtimeMode">unknown</strong></div>
+            <div><span>Runtime Enabled</span><strong id="runtimeEnabled">unknown</strong></div>
+            <div><span>Gateway Running</span><strong id="runtimeGatewayRunning">unknown</strong></div>
+            <div><span>Gateway Connected</span><strong id="runtimeGatewayConnected">unknown</strong></div>
+          </div>
+        </article>
+
+        <article class="card voice-card">
+          <h2>WiFi Voice Stream</h2>
+
+          <label for="wsUrl">WebSocket URL</label>
+          <input id="wsUrl" type="text" value="ws://localhost:8000/ws/audio-stream" />
+
+          <div class="button-row">
+            <button id="connectBtn">Connect + Start Mic</button>
+            <button id="disconnectBtn" class="secondary">Disconnect</button>
+            <button id="interruptBtn" class="danger">Interrupt</button>
+          </div>
+
+          <div class="status-list compact">
+            <div><span>Connection</span><strong id="connectionStatus">disconnected</strong></div>
+            <div><span>Audio</span><strong id="audioStatus">idle</strong></div>
+          </div>
+
+          <pre id="logs" class="logs"></pre>
+        </article>
       </section>
     </main>
 
