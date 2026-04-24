@@ -14,6 +14,13 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.services.audio_codec import (
+    OpusPcm16Decoder,
+    OpusPcm16Encoder,
+    OpusUnavailableError,
+    opus_available,
+    resample_pcm16,
+)
 from app.services.llm_inference import OllamaLLMService
 from app.services.rag_retrieval import RAGService
 from app.services.stt_engine import STTService
@@ -78,6 +85,13 @@ class SessionState:
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     interrupt_event: asyncio.Event = field(default_factory=asyncio.Event)
     tasks: list[asyncio.Task] = field(default_factory=list)
+    uplink_codec: str = settings.ws_default_audio_codec
+    uplink_sample_rate: int = settings.ws_default_uplink_sample_rate
+    downlink_codec: str = settings.ws_default_audio_codec
+    downlink_sample_rate: int = settings.ws_default_downlink_sample_rate
+    inbound_opus_decoder: OpusPcm16Decoder | None = None
+    outbound_opus_encoder: OpusPcm16Encoder | None = None
+    outbound_pcm_buffer: bytearray = field(default_factory=bytearray)
 
 
 app = FastAPI(title="Edge Voice RAG Gateway", version="0.1.0")
@@ -91,6 +105,19 @@ app.add_middleware(
 SUPPORTED_TRANSPORT_MODES = {"wifi", "bluetooth", "wired"}
 SERIAL_TRANSPORT_MODES = {"bluetooth", "wired"}
 SUPPORTED_AUDIO_CODECS = {"ulaw8k", "pcm16", "pcm16le"}
+WS_FALLBACK_AUDIO_CODEC = "pcm16"
+WS_SUPPORTED_AUDIO_CODECS = {
+    codec.strip().lower() for codec in settings.ws_supported_audio_codecs if codec.strip()
+} or {"opus", "pcm16"}
+WS_SUPPORTED_SAMPLE_RATES = tuple(
+    sorted(
+        {
+            rate
+            for rate in settings.ws_supported_sample_rates
+            if isinstance(rate, int) and rate >= 4000
+        }
+    )
+) or (settings.sample_rate,)
 transport_config_lock = asyncio.Lock()
 
 
@@ -114,6 +141,89 @@ def _to_int(value: Any, default: int, minimum: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(minimum, parsed)
+
+
+def _normalize_ws_codec(value: Any, default: str) -> str:
+    codec = str(value or default).strip().lower()
+    if codec not in WS_SUPPORTED_AUDIO_CODECS:
+        return default
+    if codec == "opus" and not opus_available():
+        return WS_FALLBACK_AUDIO_CODEC
+    return codec
+
+
+def _normalize_ws_sample_rate(value: Any, default: int) -> int:
+    target = _to_int(value, default, 4000)
+    if target in WS_SUPPORTED_SAMPLE_RATES:
+        return target
+    return default
+
+
+def _opus_frame_samples(sample_rate: int) -> int:
+    frame_ms = max(2, settings.ws_opus_frame_ms)
+    return max(1, int(sample_rate * frame_ms / 1000))
+
+
+def _build_ws_audio_caps() -> dict[str, Any]:
+    codecs = list(WS_SUPPORTED_AUDIO_CODECS)
+    if not opus_available():
+        codecs = [codec for codec in codecs if codec != "opus"]
+    default_codec = _normalize_ws_codec(settings.ws_default_audio_codec, WS_FALLBACK_AUDIO_CODEC)
+    return {
+        "supported_codecs": codecs,
+        "supported_sample_rates": list(WS_SUPPORTED_SAMPLE_RATES),
+        "default_uplink_codec": default_codec,
+        "default_uplink_sample_rate": _normalize_ws_sample_rate(
+            settings.ws_default_uplink_sample_rate, settings.sample_rate
+        ),
+        "default_downlink_codec": default_codec,
+        "default_downlink_sample_rate": _normalize_ws_sample_rate(
+            settings.ws_default_downlink_sample_rate, settings.sample_rate
+        ),
+        "opus_available": opus_available(),
+    }
+
+
+def _apply_session_audio_config(
+    state: SessionState,
+    *,
+    uplink_codec: Any,
+    uplink_sample_rate: Any,
+    downlink_codec: Any,
+    downlink_sample_rate: Any,
+) -> dict[str, Any]:
+    default_codec = _normalize_ws_codec(settings.ws_default_audio_codec, WS_FALLBACK_AUDIO_CODEC)
+    state.uplink_codec = _normalize_ws_codec(uplink_codec, default_codec)
+    state.downlink_codec = _normalize_ws_codec(downlink_codec, default_codec)
+    state.uplink_sample_rate = _normalize_ws_sample_rate(uplink_sample_rate, settings.sample_rate)
+    state.downlink_sample_rate = _normalize_ws_sample_rate(downlink_sample_rate, settings.sample_rate)
+
+    state.inbound_opus_decoder = None
+    if state.uplink_codec == "opus":
+        try:
+            state.inbound_opus_decoder = OpusPcm16Decoder(sample_rate=state.uplink_sample_rate)
+        except (OpusUnavailableError, Exception) as exc:  # noqa: BLE001
+            logger.warning("Opus uplink decoder unavailable, fallback to pcm16: %s", exc)
+            state.uplink_codec = WS_FALLBACK_AUDIO_CODEC
+
+    state.outbound_opus_encoder = None
+    state.outbound_pcm_buffer.clear()
+    if state.downlink_codec == "opus":
+        try:
+            state.outbound_opus_encoder = OpusPcm16Encoder(
+                sample_rate=state.downlink_sample_rate,
+                bitrate=max(6000, settings.ws_opus_bitrate),
+            )
+        except (OpusUnavailableError, Exception) as exc:  # noqa: BLE001
+            logger.warning("Opus downlink encoder unavailable, fallback to pcm16: %s", exc)
+            state.downlink_codec = WS_FALLBACK_AUDIO_CODEC
+
+    return {
+        "uplink_codec": state.uplink_codec,
+        "uplink_sample_rate": state.uplink_sample_rate,
+        "downlink_codec": state.downlink_codec,
+        "downlink_sample_rate": state.downlink_sample_rate,
+    }
 
 
 def _serial_defaults(port: str) -> dict[str, Any]:
@@ -435,6 +545,7 @@ async def _trigger_interrupt(state: SessionState) -> None:
     _clear_queue(state.text_queue)
     _clear_queue(state.sentence_queue)
     _clear_queue(state.outbound_audio_queue)
+    state.outbound_pcm_buffer.clear()
     await asyncio.to_thread(state.tts_service.clear_audio_queue)
 
 
@@ -496,13 +607,30 @@ async def _tts_drain_worker(state: SessionState) -> None:
         if not chunk:
             continue
 
-        if state.outbound_audio_queue.full():
-            try:
-                state.outbound_audio_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
+        downlink_pcm = chunk
+        if state.downlink_sample_rate != settings.sample_rate:
+            downlink_pcm = resample_pcm16(downlink_pcm, settings.sample_rate, state.downlink_sample_rate)
 
-        await state.outbound_audio_queue.put(chunk)
+        outbound_chunks: list[bytes] = []
+        if state.downlink_codec == "opus" and state.outbound_opus_encoder is not None:
+            state.outbound_pcm_buffer.extend(downlink_pcm)
+            frame_bytes = _opus_frame_samples(state.downlink_sample_rate) * 2
+            while len(state.outbound_pcm_buffer) >= frame_bytes:
+                frame = bytes(state.outbound_pcm_buffer[:frame_bytes])
+                del state.outbound_pcm_buffer[:frame_bytes]
+                packet = state.outbound_opus_encoder.encode(frame, frame_bytes // 2)
+                if packet:
+                    outbound_chunks.append(packet)
+        else:
+            outbound_chunks.append(downlink_pcm)
+
+        for outbound in outbound_chunks:
+            if state.outbound_audio_queue.full():
+                try:
+                    state.outbound_audio_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            await state.outbound_audio_queue.put(outbound)
 
 
 async def _sender_worker(state: SessionState) -> None:
@@ -702,6 +830,13 @@ async def audio_websocket_endpoint(websocket: WebSocket) -> None:
     await asyncio.to_thread(tts_service.start)
 
     state = SessionState(websocket=websocket, tts_service=tts_service)
+    session_audio = _apply_session_audio_config(
+        state,
+        uplink_codec=settings.ws_default_audio_codec,
+        uplink_sample_rate=settings.ws_default_uplink_sample_rate,
+        downlink_codec=settings.ws_default_audio_codec,
+        downlink_sample_rate=settings.ws_default_downlink_sample_rate,
+    )
     state.tasks = [
         asyncio.create_task(_stt_worker(state)),
         asyncio.create_task(_llm_worker(state)),
@@ -717,6 +852,10 @@ async def audio_websocket_endpoint(websocket: WebSocket) -> None:
                 "sample_rate": settings.sample_rate,
                 "threshold_bytes": INGEST_THRESHOLD_BYTES,
                 "transport_mode": "wifi",
+                "audio": {
+                    **_build_ws_audio_caps(),
+                    **session_audio,
+                },
             }
         )
     )
@@ -733,7 +872,19 @@ async def audio_websocket_endpoint(websocket: WebSocket) -> None:
                 if state.interrupt_event.is_set():
                     state.interrupt_event.clear()
 
-                state.inbound_audio_buffer.extend(audio_chunk)
+                pcm_chunk = audio_chunk
+                if state.uplink_codec == "opus" and state.inbound_opus_decoder is not None:
+                    frame_samples = _opus_frame_samples(state.uplink_sample_rate)
+                    try:
+                        pcm_chunk = state.inbound_opus_decoder.decode(audio_chunk, frame_samples)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Failed to decode opus uplink frame: %s", exc)
+                        continue
+
+                if state.uplink_sample_rate != settings.sample_rate:
+                    pcm_chunk = resample_pcm16(pcm_chunk, state.uplink_sample_rate, settings.sample_rate)
+
+                state.inbound_audio_buffer.extend(pcm_chunk)
                 if len(state.inbound_audio_buffer) >= INGEST_THRESHOLD_BYTES:
                     payload = bytes(state.inbound_audio_buffer)
                     state.inbound_audio_buffer.clear()
@@ -761,6 +912,22 @@ async def audio_websocket_endpoint(websocket: WebSocket) -> None:
                 await _trigger_interrupt(state)
             elif action in {"speech_start", "resume"}:
                 state.interrupt_event.clear()
+            elif action == "client_audio_config":
+                applied = _apply_session_audio_config(
+                    state,
+                    uplink_codec=signal.get("uplink_codec"),
+                    uplink_sample_rate=signal.get("uplink_sample_rate"),
+                    downlink_codec=signal.get("downlink_codec"),
+                    downlink_sample_rate=signal.get("downlink_sample_rate"),
+                )
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "event": "audio_config_applied",
+                            "audio": applied,
+                        }
+                    )
+                )
             elif action == "ping":
                 await websocket.send_text(json.dumps({"event": "pong"}))
 

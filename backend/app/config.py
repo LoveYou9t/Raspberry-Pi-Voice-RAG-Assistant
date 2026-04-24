@@ -31,6 +31,22 @@ def _get_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_csv(name: str, default: str) -> tuple[str, ...]:
+    raw = os.getenv(name, default)
+    values = [item.strip() for item in raw.split(",")]
+    return tuple(item for item in values if item)
+
+
+def _get_csv_int(name: str, default: str) -> tuple[int, ...]:
+    output: list[int] = []
+    for item in _get_csv(name, default):
+        try:
+            output.append(int(item))
+        except ValueError:
+            continue
+    return tuple(output)
+
+
 @dataclass(frozen=True)
 class Settings:
     app_host: str = os.getenv("APP_HOST", "0.0.0.0")
@@ -81,6 +97,17 @@ class Settings:
 
     sample_rate: int = _get_int("SAMPLE_RATE", 16000)
     audio_chunk_seconds: float = _get_float("AUDIO_CHUNK_SECONDS", 1.0)
+    ws_supported_audio_codecs: tuple[str, ...] = _get_csv(
+        "WS_SUPPORTED_AUDIO_CODECS", "opus,pcm16"
+    )
+    ws_supported_sample_rates: tuple[int, ...] = _get_csv_int(
+        "WS_SUPPORTED_SAMPLE_RATES", "16000,24000,48000"
+    )
+    ws_default_audio_codec: str = os.getenv("WS_DEFAULT_AUDIO_CODEC", "opus")
+    ws_default_uplink_sample_rate: int = _get_int("WS_DEFAULT_UPLINK_SAMPLE_RATE", 16000)
+    ws_default_downlink_sample_rate: int = _get_int("WS_DEFAULT_DOWNLINK_SAMPLE_RATE", 16000)
+    ws_opus_frame_ms: int = _get_int("WS_OPUS_FRAME_MS", 20)
+    ws_opus_bitrate: int = _get_int("WS_OPUS_BITRATE", 24000)
 
     vad_min_silence_ms: int = _get_int("VAD_MIN_SILENCE_MS", 500)
     vad_threshold: float = _get_float("VAD_THRESHOLD", 0.4)

@@ -9,3 +9,4 @@ pyarrow==18.1.0
 pandas==2.2.3
 pyserial==3.5
 requests==2.32.3
+opuslib==3.0.1
