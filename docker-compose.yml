@@ -196,6 +196,7 @@ services:
       - OLLAMA_HOST=http://ollama_server:11434
       - KNOWLEDGE_DIR=/app/knowledge_base
       - LANCEDB_DIR=/app/lancedb_data
+      - BLUETOOTH_DEFAULT_PORT=${BLUETOOTH_DEFAULT_PORT:-/dev/rfcomm0}
       - STT_PROVIDER=${STT_PROVIDER:-whisper_cpp}
       - STT_MODEL=${STT_MODEL:-/app/model_cache/models/faster-whisper-tiny}
       - STT_COMPUTE_TYPE=${STT_COMPUTE_TYPE:-int8}
@@ -217,12 +218,12 @@ services:
       - UART_FRAME_PAYLOAD_BYTES=${UART_FRAME_PAYLOAD_BYTES:-240}
       - UART_AUDIO_CODEC=${UART_AUDIO_CODEC:-ulaw8k}
       - UART_DEVICE_SAMPLE_RATE=${UART_DEVICE_SAMPLE_RATE:-8000}
-    # Enable these lines on Raspberry Pi to pass the physical UART device through.
-    # devices:
-    #   - "${UART_PORT_HOST:-/dev/ttyAMA0}:${UART_PORT:-/dev/ttyAMA0}"
+    # Raspberry Pi dual-link mode: mount host /dev so both /dev/rfcomm0 and /dev/tty* are visible.
+    # If you need stricter isolation, remove this mount and switch back to explicit devices mapping.
     ports:
       - "8000:8000"
     volumes:
+      - /dev:/dev
       - ./knowledge_base:/app/knowledge_base
       - ./lancedb_data:/app/lancedb_data
       - ./whisper_cache:/app/model_cache

@@ -1,4 +1,208 @@
+const LANG_STORAGE_KEY = "edge_voice_dashboard_lang";
+const LOG_STORAGE_PREFIX = "edge_voice_dashboard_logs";
+const LOG_MAX_LINES = 500;
+
+let activeLang = localStorage.getItem(LANG_STORAGE_KEY) || "zh";
+let activeLogKey = `${LOG_STORAGE_PREFIX}_unknown`;
+
+const I18N = {
+  zh: {
+    dashboardTitle: "Edge Voice RAG 仪表板",
+    transportControl: "传输控制",
+    backendApiBase: "后端 API 地址",
+    mode: "模式",
+    modeWifi: "WiFi",
+    modeBluetooth: "蓝牙串口",
+    modeWired: "有线串口",
+    enabled: "启用",
+    wifiHint: "WiFi 模式通过后端 WebSocket 端点进行流式传输。",
+    bluetoothSerial: "蓝牙串口",
+    wiredSerial: "有线串口",
+    port: "端口",
+    baudrate: "波特率",
+    timeoutMs: "超时 (ms)",
+    readSize: "读取大小",
+    frameBytes: "帧字节数",
+    codec: "编码",
+    deviceSampleRate: "设备采样率",
+    applyTransport: "应用传输",
+    reload: "重新加载",
+    runtimeMode: "运行模式",
+    runtimeEnabled: "运行启用",
+    gatewayRunning: "网关运行",
+    gatewayConnected: "网关连接",
+    wifiVoiceStream: "WiFi 语音流",
+    websocketUrl: "WebSocket 地址",
+    connectStartMic: "连接并启动麦克风",
+    disconnect: "断开连接",
+    interrupt: "打断",
+    connection: "连接",
+    audio: "音频",
+    switchToEnglish: "English",
+    switchToChinese: "中文",
+    commonOn: "开",
+    commonOff: "关",
+    commonUnknown: "未知",
+    badgeTransport: "传输",
+    badgeGateway: "网关",
+    badgeConnectedAt: "已连接 @ {port}",
+    badgeRunningAt: "运行中 @ {port}",
+    badgeIdle: "空闲",
+    badgeUnavailable: "不可用",
+    hintEnableWifiToConnect: "请启用 WiFi 传输后再连接 WebSocket。",
+    statusConnected: "已连接",
+    statusDisconnected: "已断开",
+    statusIdle: "空闲",
+    statusCapturing: "采集中",
+    statusPlaying: "播放中",
+    errorApiBaseEmpty: "API 地址为空。",
+    errorWsUrlEmpty: "WebSocket 地址为空。",
+    logWsAlreadyConnected: "WebSocket 已连接。",
+    logWsConnected: "WebSocket 已连接: {url}",
+    logMicStartFailed: "麦克风启动失败: {error}",
+    logWsDisconnected: "WebSocket 已断开。",
+    logWsError: "WebSocket 错误。",
+    logGatewayReady: "网关就绪。sample_rate={sample_rate} mode={mode}",
+    logGatewayError: "网关错误: {message}",
+    logControlEvent: "控制事件: {text}",
+    logTextFrame: "文本帧: {text}",
+    logMicStarted: "麦克风已启动。",
+    logTransportLoaded: "传输配置已加载: mode={mode} enabled={enabled}",
+    logTransportApplied: "传输配置已应用: mode={mode} enabled={enabled}",
+    logWsDisconnectedByTransport: "WiFi 传输未激活，已断开 WebSocket。",
+    logHealthRefreshFailed: "健康检查刷新失败: {error}",
+    logApplyTransportFailed: "应用传输失败: {error}",
+    logReloadTransportFailed: "重新加载传输失败: {error}",
+    logConnectFailed: "连接失败: {error}",
+    logInterruptSent: "已发送打断信号。",
+    logInitialLoadFailed: "初始加载失败: {error}",
+  },
+  en: {
+    dashboardTitle: "Edge Voice RAG Dashboard",
+    transportControl: "Transport Control",
+    backendApiBase: "Backend API Base",
+    mode: "Mode",
+    modeWifi: "WiFi",
+    modeBluetooth: "Bluetooth Serial",
+    modeWired: "Wired Serial",
+    enabled: "Enabled",
+    wifiHint: "WiFi mode uses WebSocket streaming through the configured backend endpoint.",
+    bluetoothSerial: "Bluetooth Serial",
+    wiredSerial: "Wired Serial",
+    port: "Port",
+    baudrate: "Baudrate",
+    timeoutMs: "Timeout (ms)",
+    readSize: "Read Size",
+    frameBytes: "Frame Bytes",
+    codec: "Codec",
+    deviceSampleRate: "Device Sample Rate",
+    applyTransport: "Apply Transport",
+    reload: "Reload",
+    runtimeMode: "Runtime Mode",
+    runtimeEnabled: "Runtime Enabled",
+    gatewayRunning: "Gateway Running",
+    gatewayConnected: "Gateway Connected",
+    wifiVoiceStream: "WiFi Voice Stream",
+    websocketUrl: "WebSocket URL",
+    connectStartMic: "Connect + Start Mic",
+    disconnect: "Disconnect",
+    interrupt: "Interrupt",
+    connection: "Connection",
+    audio: "Audio",
+    switchToEnglish: "English",
+    switchToChinese: "中文",
+    commonOn: "on",
+    commonOff: "off",
+    commonUnknown: "unknown",
+    badgeTransport: "transport",
+    badgeGateway: "gateway",
+    badgeConnectedAt: "connected @ {port}",
+    badgeRunningAt: "running @ {port}",
+    badgeIdle: "idle",
+    badgeUnavailable: "unavailable",
+    hintEnableWifiToConnect: "Enable WiFi transport to use WebSocket stream.",
+    statusConnected: "connected",
+    statusDisconnected: "disconnected",
+    statusIdle: "idle",
+    statusCapturing: "capturing",
+    statusPlaying: "playing",
+    errorApiBaseEmpty: "API base is empty.",
+    errorWsUrlEmpty: "WebSocket URL is empty.",
+    logWsAlreadyConnected: "WebSocket already connected.",
+    logWsConnected: "WebSocket connected: {url}",
+    logMicStartFailed: "Microphone start failed: {error}",
+    logWsDisconnected: "WebSocket disconnected.",
+    logWsError: "WebSocket error.",
+    logGatewayReady: "Gateway ready. sample_rate={sample_rate} mode={mode}",
+    logGatewayError: "Gateway error: {message}",
+    logControlEvent: "Control event: {text}",
+    logTextFrame: "Text frame: {text}",
+    logMicStarted: "Microphone started.",
+    logTransportLoaded: "Transport loaded: mode={mode} enabled={enabled}",
+    logTransportApplied: "Transport applied: mode={mode} enabled={enabled}",
+    logWsDisconnectedByTransport: "WebSocket disconnected because WiFi transport is not active.",
+    logHealthRefreshFailed: "Health refresh failed: {error}",
+    logApplyTransportFailed: "Apply transport failed: {error}",
+    logReloadTransportFailed: "Reload transport failed: {error}",
+    logConnectFailed: "Connect failed: {error}",
+    logInterruptSent: "Interrupt sent.",
+    logInitialLoadFailed: "Initial dashboard load failed: {error}",
+  },
+};
+
+function t(key, vars = {}) {
+  let text = (I18N[activeLang] && I18N[activeLang][key]) || I18N.en[key] || key;
+  for (const [name, value] of Object.entries(vars)) {
+    text = text.replace(`{${name}}`, String(value));
+  }
+  return text;
+}
+
+function setActiveLogKey(startupAt) {
+  const nextKey = `${LOG_STORAGE_PREFIX}_${startupAt || "unknown"}`;
+  const changed = nextKey !== activeLogKey;
+  activeLogKey = nextKey;
+  return changed;
+}
+
+function readPersistedLogLines() {
+  try {
+    const raw = localStorage.getItem(activeLogKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item) => typeof item === "string");
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedLogLines(lines) {
+  try {
+    localStorage.setItem(activeLogKey, JSON.stringify(lines.slice(-LOG_MAX_LINES)));
+  } catch {
+    // Ignore storage quota errors.
+  }
+}
+
+function appendPersistedLogLine(line) {
+  const lines = readPersistedLogLines();
+  lines.push(line);
+  writePersistedLogLines(lines);
+}
+
+function restoreLogPanel() {
+  const lines = readPersistedLogLines();
+  dom.logs.textContent = lines.length > 0 ? `${lines.join("\n")}\n` : "";
+  dom.logs.scrollTop = dom.logs.scrollHeight;
+}
+
 const dom = {
+  langToggleBtn: document.getElementById("langToggleBtn"),
   apiBase: document.getElementById("apiBase"),
   transportMode: document.getElementById("transportMode"),
   transportEnabled: document.getElementById("transportEnabled"),
@@ -36,6 +240,20 @@ const dom = {
   wdSampleRate: document.getElementById("wdSampleRate"),
 };
 
+function applyLanguage() {
+  document.documentElement.lang = activeLang === "zh" ? "zh-CN" : "en";
+  document.title = t("dashboardTitle");
+
+  for (const element of document.querySelectorAll("[data-i18n]")) {
+    const key = element.getAttribute("data-i18n");
+    element.textContent = t(key);
+  }
+
+  if (dom.langToggleBtn) {
+    dom.langToggleBtn.textContent = activeLang === "zh" ? t("switchToEnglish") : t("switchToChinese");
+  }
+}
+
 function parseIntSafe(value, fallback, minimum = 1) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -47,7 +265,7 @@ function parseIntSafe(value, fallback, minimum = 1) {
 function normalizeBaseUrl(rawBase) {
   const cleaned = String(rawBase || "").trim();
   if (!cleaned) {
-    throw new Error("API base is empty.");
+    throw new Error(t("errorApiBaseEmpty"));
   }
   const url = new URL(cleaned);
   url.pathname = url.pathname.replace(/\/+$/, "");
@@ -57,6 +275,10 @@ function normalizeBaseUrl(rawBase) {
 function setPill(node, text, tone) {
   node.textContent = text;
   node.className = `pill ${tone}`;
+}
+
+function stateLabel(value) {
+  return value ? t("commonOn") : t("commonOff");
 }
 
 class VoiceClient {
@@ -69,20 +291,40 @@ class VoiceClient {
     this.processorNode = null;
     this.targetSampleRate = 16000;
     this.jitterSafetySeconds = 0.1;
+    this.connectionState = "disconnected";
+    this.audioState = "idle";
   }
 
   log(message) {
     const timestamp = new Date().toLocaleTimeString();
-    dom.logs.textContent += `[${timestamp}] ${message}\n`;
+    const line = `[${timestamp}] ${message}`;
+    dom.logs.textContent += `${line}\n`;
     dom.logs.scrollTop = dom.logs.scrollHeight;
+    appendPersistedLogLine(line);
   }
 
   setConnection(status) {
-    dom.connectionStatus.textContent = status;
+    this.connectionState = status;
+    const keyMap = {
+      connected: "statusConnected",
+      disconnected: "statusDisconnected",
+    };
+    dom.connectionStatus.textContent = t(keyMap[status] || "commonUnknown");
   }
 
   setAudio(status) {
-    dom.audioStatus.textContent = status;
+    this.audioState = status;
+    const keyMap = {
+      idle: "statusIdle",
+      capturing: "statusCapturing",
+      playing: "statusPlaying",
+    };
+    dom.audioStatus.textContent = t(keyMap[status] || "commonUnknown");
+  }
+
+  refreshLocalizedStates() {
+    this.setConnection(this.connectionState);
+    this.setAudio(this.audioState);
   }
 
   isConnected() {
@@ -91,12 +333,12 @@ class VoiceClient {
 
   async connect(url) {
     if (this.isConnected()) {
-      this.log("WebSocket already connected.");
+      this.log(t("logWsAlreadyConnected"));
       return;
     }
 
     if (!url) {
-      throw new Error("WebSocket URL is empty.");
+      throw new Error(t("errorWsUrlEmpty"));
     }
 
     this.audioContext = this.audioContext || new AudioContext();
@@ -109,7 +351,7 @@ class VoiceClient {
 
       this.socket.onopen = async () => {
         this.setConnection("connected");
-        this.log(`WebSocket connected: ${url}`);
+        this.log(t("logWsConnected", { url }));
 
         try {
           await this.startMicrophone();
@@ -117,7 +359,7 @@ class VoiceClient {
           settled = true;
           resolve();
         } catch (error) {
-          this.log(`Microphone start failed: ${error.message}`);
+          this.log(t("logMicStartFailed", { error: error.message }));
           settled = true;
           reject(error);
         }
@@ -136,15 +378,15 @@ class VoiceClient {
         this.stopMicrophone();
         this.setConnection("disconnected");
         this.setAudio("idle");
-        this.log("WebSocket disconnected.");
+        this.log(t("logWsDisconnected"));
         this.socket = null;
       };
 
       this.socket.onerror = () => {
-        this.log("WebSocket error.");
+        this.log(t("logWsError"));
         if (!settled) {
           settled = true;
-          reject(new Error("WebSocket error"));
+          reject(new Error(t("logWsError")));
         }
       };
     });
@@ -175,7 +417,10 @@ class VoiceClient {
       const message = JSON.parse(rawText);
       if (message.event === "ready") {
         this.log(
-          `Gateway ready. sample_rate=${message.sample_rate} mode=${message.transport_mode || "unknown"}`
+          t("logGatewayReady", {
+            sample_rate: message.sample_rate,
+            mode: message.transport_mode || t("commonUnknown"),
+          })
         );
         return;
       }
@@ -183,12 +428,12 @@ class VoiceClient {
         return;
       }
       if (message.event === "error") {
-        this.log(`Gateway error: ${message.message || "unknown"}`);
+        this.log(t("logGatewayError", { message: message.message || t("commonUnknown") }));
         return;
       }
-      this.log(`Control event: ${rawText}`);
+      this.log(t("logControlEvent", { text: rawText }));
     } catch {
-      this.log(`Text frame: ${rawText}`);
+      this.log(t("logTextFrame", { text: rawText }));
     }
   }
 
@@ -222,7 +467,7 @@ class VoiceClient {
     this.sourceNode.connect(this.processorNode);
     this.processorNode.connect(this.audioContext.destination);
     this.setAudio("capturing");
-    this.log("Microphone started.");
+    this.log(t("logMicStarted"));
   }
 
   stopMicrophone() {
@@ -324,6 +569,8 @@ class DashboardController {
     this.client = client;
     this.healthTimer = null;
     this.knownWsPath = "/ws/audio-stream";
+    this.lastTransportStatus = null;
+    this.lastUartStatus = null;
   }
 
   log(message) {
@@ -342,30 +589,28 @@ class DashboardController {
   }
 
   setRuntimeStatus(status, uart) {
-    dom.runtimeMode.textContent = status.mode || "unknown";
-    dom.runtimeEnabled.textContent = status.enabled ? "true" : "false";
-    dom.runtimeGatewayRunning.textContent = status.gateway_running ? "true" : "false";
-    dom.runtimeGatewayConnected.textContent = status.gateway_connected ? "true" : "false";
+    this.lastTransportStatus = status;
+    this.lastUartStatus = uart;
 
-    const transportTone = !status.enabled
-      ? "bad"
-      : status.mode === "wifi"
-        ? "ok"
-        : "warn";
-    setPill(
-      dom.backendTransportBadge,
-      `transport: ${status.mode || "unknown"} / ${status.enabled ? "on" : "off"}`,
-      transportTone
-    );
+    dom.runtimeMode.textContent = status.mode || t("commonUnknown");
+    dom.runtimeEnabled.textContent = stateLabel(Boolean(status.enabled));
+    dom.runtimeGatewayRunning.textContent = stateLabel(Boolean(status.gateway_running));
+    dom.runtimeGatewayConnected.textContent = stateLabel(Boolean(status.gateway_connected));
+
+    const transportTone = !status.enabled ? "bad" : status.mode === "wifi" ? "ok" : "warn";
+    const transportText = `${t("badgeTransport")}: ${status.mode || t("commonUnknown")} / ${
+      status.enabled ? t("commonOn") : t("commonOff")
+    }`;
+    setPill(dom.backendTransportBadge, transportText, transportTone);
 
     const gatewayRunning = Boolean(uart?.running);
     const gatewayConnected = Boolean(uart?.connected);
     const gatewayTone = gatewayConnected ? "ok" : gatewayRunning ? "warn" : "neutral";
     const gatewayText = gatewayConnected
-      ? `gateway: connected @ ${uart.port || "unknown"}`
+      ? `${t("badgeGateway")}: ${t("badgeConnectedAt", { port: uart.port || t("commonUnknown") })}`
       : gatewayRunning
-        ? `gateway: running @ ${uart?.port || "unknown"}`
-        : "gateway: idle";
+        ? `${t("badgeGateway")}: ${t("badgeRunningAt", { port: uart?.port || t("commonUnknown") })}`
+        : `${t("badgeGateway")}: ${t("badgeIdle")}`;
     setPill(dom.gatewayBadge, gatewayText, gatewayTone);
   }
 
@@ -409,7 +654,7 @@ class DashboardController {
 
     const wifiReady = mode === "wifi" && dom.transportEnabled.checked;
     dom.connectBtn.disabled = !wifiReady;
-    dom.connectBtn.title = wifiReady ? "" : "Enable WiFi transport to use WebSocket stream.";
+    dom.connectBtn.title = wifiReady ? "" : t("hintEnableWifiToConnect");
   }
 
   async loadTransport() {
@@ -433,7 +678,7 @@ class DashboardController {
 
     this.updateVisibility();
     this.setRuntimeStatus(status, null);
-    this.log(`Transport loaded: mode=${config.mode} enabled=${config.enabled}`);
+    this.log(t("logTransportLoaded", { mode: config.mode, enabled: String(config.enabled) }));
   }
 
   async saveTransport() {
@@ -459,10 +704,10 @@ class DashboardController {
 
     if ((payload.mode !== "wifi" || !payload.enabled) && this.client.isConnected()) {
       await this.client.disconnect();
-      this.log("WebSocket disconnected because WiFi transport is not active.");
+      this.log(t("logWsDisconnectedByTransport"));
     }
 
-    this.log(`Transport applied: mode=${payload.mode} enabled=${payload.enabled}`);
+    this.log(t("logTransportApplied", { mode: payload.mode, enabled: String(payload.enabled) }));
     await this.refreshHealth();
   }
 
@@ -472,12 +717,19 @@ class DashboardController {
       if (!response.ok) {
         throw new Error(`healthz failed (${response.status})`);
       }
+
       const health = await response.json();
+      if (setActiveLogKey(health.startup_at)) {
+        restoreLogPanel();
+      }
+
       this.setRuntimeStatus(health.transport || {}, health.uart || {});
+      return health;
     } catch (error) {
-      this.log(`Health refresh failed: ${error.message}`);
-      setPill(dom.backendTransportBadge, "transport: unavailable", "bad");
-      setPill(dom.gatewayBadge, "gateway: unavailable", "bad");
+      this.log(t("logHealthRefreshFailed", { error: error.message }));
+      setPill(dom.backendTransportBadge, `${t("badgeTransport")}: ${t("badgeUnavailable")}`, "bad");
+      setPill(dom.gatewayBadge, `${t("badgeGateway")}: ${t("badgeUnavailable")}`, "bad");
+      return null;
     }
   }
 
@@ -503,7 +755,7 @@ class DashboardController {
       try {
         await this.saveTransport();
       } catch (error) {
-        this.log(`Apply transport failed: ${error.message}`);
+        this.log(t("logApplyTransportFailed", { error: error.message }));
       }
     });
 
@@ -512,7 +764,7 @@ class DashboardController {
         await this.loadTransport();
         await this.refreshHealth();
       } catch (error) {
-        this.log(`Reload transport failed: ${error.message}`);
+        this.log(t("logReloadTransportFailed", { error: error.message }));
       }
     });
 
@@ -520,7 +772,7 @@ class DashboardController {
       try {
         await this.client.connect(dom.wsUrl.value.trim());
       } catch (error) {
-        this.log(`Connect failed: ${error.message}`);
+        this.log(t("logConnectFailed", { error: error.message }));
       }
     });
 
@@ -530,19 +782,36 @@ class DashboardController {
 
     dom.interruptBtn.addEventListener("click", () => {
       this.client.sendControl("interrupt");
-      this.log("Interrupt sent.");
+      this.log(t("logInterruptSent"));
     });
+
+    if (dom.langToggleBtn) {
+      dom.langToggleBtn.addEventListener("click", () => {
+        activeLang = activeLang === "zh" ? "en" : "zh";
+        localStorage.setItem(LANG_STORAGE_KEY, activeLang);
+        applyLanguage();
+        this.updateVisibility();
+        if (this.lastTransportStatus) {
+          this.setRuntimeStatus(this.lastTransportStatus, this.lastUartStatus);
+        }
+        this.client.refreshLocalizedStates();
+      });
+    }
   }
 
   async init() {
     this.bindEvents();
+    applyLanguage();
+    restoreLogPanel();
+    this.client.refreshLocalizedStates();
     this.updateVisibility();
 
     try {
+      await this.refreshHealth();
       await this.loadTransport();
       await this.refreshHealth();
     } catch (error) {
-      this.log(`Initial dashboard load failed: ${error.message}`);
+      this.log(t("logInitialLoadFailed", { error: error.message }));
     }
 
     this.startHealthPolling();

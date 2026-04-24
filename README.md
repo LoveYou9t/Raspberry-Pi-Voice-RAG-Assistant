@@ -99,6 +99,8 @@ LLM 排障命令：
 默认配置会落盘到 `TRANSPORT_CONFIG_PATH`（默认 `/app/lancedb_data/transport_config.json`）。
 
 如果启用蓝牙/有线串口，请确认容器已具备对应设备访问权限（`devices` 透传）。
+当前默认 compose 已为 `fastapi_backend` 挂载 `/dev:/dev`，可在 Dashboard 中直接切换 `bluetooth` 与 `wired`。
+如需最小权限部署，可移除该挂载并改回精确 `devices` 映射。
 
 ## Whisper.cpp q5_0 手动模型放置
 
@@ -130,21 +132,29 @@ STT_CPP_FALLBACK_TO_FASTER=1
 STT_PROVIDER=faster_whisper
 ```
 
-## UART 有线模式（实验版）
+## UART / 蓝牙串口模式（实验版）
 
-后端已支持可选 UART 模式，默认关闭，不影响现有 WebSocket 使用。
+后端已支持蓝牙 RFCOMM 与有线 UART 模式，并可在 Dashboard 热切换。
 
-1. 在 `.env` 配置 UART 参数（示例）：
+1. 在 `.env` 配置串口参数（示例）：
 
 ```bash
 UART_ENABLED=1
+TRANSPORT_DEFAULT_MODE=bluetooth
+BLUETOOTH_DEFAULT_PORT=/dev/rfcomm0
 UART_PORT=/dev/ttyAMA0
 UART_BAUDRATE=115200
 UART_AUDIO_CODEC=ulaw8k
 UART_DEVICE_SAMPLE_RATE=8000
 ```
 
-1. 在树莓派主机上开启容器设备透传（取消 [docker-compose.yml](docker-compose.yml) 中 `fastapi_backend` 的 `devices` 注释）。
+1. 在树莓派主机准备设备：
+
+```bash
+ls -l /dev/ttyAMA0 /dev/rfcomm0
+```
+
+若 `rfcomm0` 不存在，请先在宿主机完成蓝牙配对并创建 RFCOMM 设备。
 1. 重启服务：
 
 ```bash

@@ -61,6 +61,7 @@ llm_warmup_state: dict[str, Any] = {
     "message": "warmup not started",
     "last_keepalive_at": None,
 }
+service_started_at = datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -612,6 +613,7 @@ async def root() -> dict[str, Any]:
         "service": "edge-voice-rag",
         "status": "running",
         "ws": settings.ws_path,
+        "startup_at": service_started_at,
         "transport": _build_transport_status(),
     }
 
@@ -625,6 +627,7 @@ async def healthz() -> dict[str, Any]:
     status = "ok" if tts_status["tts_mode"] != "unavailable" else "degraded"
     return {
         "status": status,
+        "startup_at": service_started_at,
         "stt_backend": stt_service.backend,
         "stt_provider": settings.stt_provider,
         "stt_model": settings.stt_model,
@@ -658,7 +661,15 @@ async def update_transport_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
 
     async with transport_config_lock:
         merged = _deep_merge_dict(transport_config, payload)
-        transport_config = _normalize_transport_config(merged)
+        next_config = _normalize_transport_config(merged)
+        if next_config == transport_config:
+            return {
+                "config": transport_config,
+                "status": _build_transport_status(),
+                "ws_path": settings.ws_path,
+            }
+
+        transport_config = next_config
         _save_transport_config(transport_config)
         await _apply_transport_config()
         return {

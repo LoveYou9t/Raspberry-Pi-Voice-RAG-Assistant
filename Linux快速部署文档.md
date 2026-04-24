@@ -92,22 +92,28 @@
 3. 局域网访问（其他设备）：
    <http://Linux主机IP:8080>
 
-## 7. 启用 UART 有线模式（实验版，可选）
+## 7. 启用蓝牙 / UART 串口模式（实验版，可选）
 
-如果你需要走树莓派串口与 MCU/ESP32 有线通讯，请按以下步骤启用。
+如果你需要在 Dashboard 中切换蓝牙 RFCOMM 与有线 UART，请按以下步骤启用。
 
 1. 编辑 `.env` 并增加参数：
    UART_ENABLED=1
+   TRANSPORT_DEFAULT_MODE=bluetooth
+   BLUETOOTH_DEFAULT_PORT=/dev/rfcomm0
    UART_PORT=/dev/ttyAMA0
    UART_BAUDRATE=115200
    UART_AUDIO_CODEC=ulaw8k
    UART_DEVICE_SAMPLE_RATE=8000
-2. 在 `docker-compose.yml` 中，取消 `fastapi_backend` 的 `devices` 注释，使串口设备映射到容器。
-3. 重新启动服务：
+2. 当前 `docker-compose.yml` 已默认将宿主机 `/dev` 挂载到容器（`/dev:/dev`），可以同时访问 `/dev/rfcomm0` 与 `/dev/tty*`。
+   如果你改回精确设备映射，请确保目标设备确实存在再启动容器。
+3. 启动前在宿主机检查设备是否存在：
+   ls -l /dev/ttyAMA0 /dev/rfcomm0
+   若 `rfcomm0` 不存在，请先完成蓝牙配对并创建 RFCOMM 设备。
+4. 重新启动服务：
    docker compose up -d --build
-4. 查看健康检查：
+5. 查看健康检查：
    curl <http://127.0.0.1:8000/healthz>
-5. 在返回结果的 `uart` 字段中确认：
+6. 在返回结果的 `transport` 与 `uart` 字段中确认：
    `running=true`、`connected=true`。
 
 提示：115200 带宽有限，建议保持 `UART_AUDIO_CODEC=ulaw8k`。若改为原始 PCM，易出现卡顿或丢帧。

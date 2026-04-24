@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Edge Voice RAG Dashboard</title>
+    <title data-i18n="dashboardTitle">Edge Voice RAG Dashboard</title>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap"
@@ -15,109 +15,109 @@
     <main class="dashboard">
       <header class="hero">
         <div>
-          <h1>Edge Voice RAG Transport Dashboard</h1>
-          <p>Switch between WiFi, Bluetooth serial, and wired serial with one control plane.</p>
+          <h1 data-i18n="dashboardTitle">Edge Voice RAG Dashboard</h1>
         </div>
         <div class="pill-row">
           <span id="backendTransportBadge" class="pill neutral">transport: unknown</span>
           <span id="gatewayBadge" class="pill neutral">gateway: unknown</span>
+          <button id="langToggleBtn" class="pill neutral lang-toggle-btn">English</button>
         </div>
       </header>
 
       <section class="grid">
         <article class="card transport-card">
-          <h2>Transport Control</h2>
+          <h2 data-i18n="transportControl">Transport Control</h2>
 
-          <label for="apiBase">Backend API Base</label>
+          <label for="apiBase" data-i18n="backendApiBase">Backend API Base</label>
           <input id="apiBase" type="text" value="http://localhost:8000" />
 
           <div class="inline-controls">
             <div>
-              <label for="transportMode">Mode</label>
+              <label for="transportMode" data-i18n="mode">Mode</label>
               <select id="transportMode">
-                <option value="wifi">WiFi</option>
-                <option value="bluetooth">Bluetooth Serial</option>
-                <option value="wired">Wired Serial</option>
+                <option value="wifi" data-i18n="modeWifi">WiFi</option>
+                <option value="bluetooth" data-i18n="modeBluetooth">Bluetooth Serial</option>
+                <option value="wired" data-i18n="modeWired">Wired Serial</option>
               </select>
             </div>
             <div class="toggle-wrap">
-              <label for="transportEnabled">Enabled</label>
+              <label for="transportEnabled" data-i18n="enabled">Enabled</label>
               <input id="transportEnabled" type="checkbox" checked />
             </div>
           </div>
 
-          <div id="wifiHint" class="subtle-box">
+          <div id="wifiHint" class="subtle-box" data-i18n="wifiHint">
             WiFi mode uses WebSocket streaming through the configured backend endpoint.
           </div>
 
           <div id="bluetoothConfig" class="serial-block">
-            <h3>Bluetooth Serial</h3>
+            <h3 data-i18n="bluetoothSerial">Bluetooth Serial</h3>
             <div class="field-grid">
-              <label>Port <input id="btPort" type="text" placeholder="/dev/rfcomm0" /></label>
-              <label>Baudrate <input id="btBaudrate" type="number" min="1200" /></label>
-              <label>Timeout (ms) <input id="btTimeoutMs" type="number" min="1" /></label>
-              <label>Read Size <input id="btReadSize" type="number" min="64" /></label>
-              <label>Frame Bytes <input id="btFramePayloadBytes" type="number" min="64" /></label>
+              <label><span data-i18n="port">Port</span> <input id="btPort" type="text" placeholder="/dev/rfcomm0" /></label>
+              <label><span data-i18n="baudrate">Baudrate</span> <input id="btBaudrate" type="number" min="1200" /></label>
+              <label><span data-i18n="timeoutMs">Timeout (ms)</span> <input id="btTimeoutMs" type="number" min="1" /></label>
+              <label><span data-i18n="readSize">Read Size</span> <input id="btReadSize" type="number" min="64" /></label>
+              <label><span data-i18n="frameBytes">Frame Bytes</span> <input id="btFramePayloadBytes" type="number" min="64" /></label>
               <label>
-                Codec
+                <span data-i18n="codec">Codec</span>
                 <select id="btAudioCodec">
                   <option value="ulaw8k">ulaw8k</option>
                   <option value="pcm16">pcm16</option>
                   <option value="pcm16le">pcm16le</option>
                 </select>
               </label>
-              <label>Device Sample Rate <input id="btSampleRate" type="number" min="4000" /></label>
+              <label><span data-i18n="deviceSampleRate">Device Sample Rate</span> <input id="btSampleRate" type="number" min="4000" /></label>
             </div>
           </div>
 
           <div id="wiredConfig" class="serial-block">
-            <h3>Wired Serial</h3>
+            <h3 data-i18n="wiredSerial">Wired Serial</h3>
             <div class="field-grid">
-              <label>Port <input id="wdPort" type="text" placeholder="/dev/ttyUSB0" /></label>
-              <label>Baudrate <input id="wdBaudrate" type="number" min="1200" /></label>
-              <label>Timeout (ms) <input id="wdTimeoutMs" type="number" min="1" /></label>
-              <label>Read Size <input id="wdReadSize" type="number" min="64" /></label>
-              <label>Frame Bytes <input id="wdFramePayloadBytes" type="number" min="64" /></label>
+              <label><span data-i18n="port">Port</span> <input id="wdPort" type="text" placeholder="/dev/ttyUSB0" /></label>
+              <label><span data-i18n="baudrate">Baudrate</span> <input id="wdBaudrate" type="number" min="1200" /></label>
+              <label><span data-i18n="timeoutMs">Timeout (ms)</span> <input id="wdTimeoutMs" type="number" min="1" /></label>
+              <label><span data-i18n="readSize">Read Size</span> <input id="wdReadSize" type="number" min="64" /></label>
+              <label><span data-i18n="frameBytes">Frame Bytes</span> <input id="wdFramePayloadBytes" type="number" min="64" /></label>
               <label>
-                Codec
+                <span data-i18n="codec">Codec</span>
                 <select id="wdAudioCodec">
                   <option value="ulaw8k">ulaw8k</option>
                   <option value="pcm16">pcm16</option>
                   <option value="pcm16le">pcm16le</option>
                 </select>
               </label>
-              <label>Device Sample Rate <input id="wdSampleRate" type="number" min="4000" /></label>
+              <label><span data-i18n="deviceSampleRate">Device Sample Rate</span> <input id="wdSampleRate" type="number" min="4000" /></label>
             </div>
           </div>
 
           <div class="button-row">
-            <button id="saveTransportBtn">Apply Transport</button>
-            <button id="reloadTransportBtn" class="secondary">Reload</button>
+            <button id="saveTransportBtn" data-i18n="applyTransport">Apply Transport</button>
+            <button id="reloadTransportBtn" class="secondary" data-i18n="reload">Reload</button>
           </div>
 
           <div class="status-list">
-            <div><span>Runtime Mode</span><strong id="runtimeMode">unknown</strong></div>
-            <div><span>Runtime Enabled</span><strong id="runtimeEnabled">unknown</strong></div>
-            <div><span>Gateway Running</span><strong id="runtimeGatewayRunning">unknown</strong></div>
-            <div><span>Gateway Connected</span><strong id="runtimeGatewayConnected">unknown</strong></div>
+            <div><span data-i18n="runtimeMode">Runtime Mode</span><strong id="runtimeMode">unknown</strong></div>
+            <div><span data-i18n="runtimeEnabled">Runtime Enabled</span><strong id="runtimeEnabled">unknown</strong></div>
+            <div><span data-i18n="gatewayRunning">Gateway Running</span><strong id="runtimeGatewayRunning">unknown</strong></div>
+            <div><span data-i18n="gatewayConnected">Gateway Connected</span><strong id="runtimeGatewayConnected">unknown</strong></div>
           </div>
         </article>
 
         <article class="card voice-card">
-          <h2>WiFi Voice Stream</h2>
+          <h2 data-i18n="wifiVoiceStream">WiFi Voice Stream</h2>
 
-          <label for="wsUrl">WebSocket URL</label>
+          <label for="wsUrl" data-i18n="websocketUrl">WebSocket URL</label>
           <input id="wsUrl" type="text" value="ws://localhost:8000/ws/audio-stream" />
 
           <div class="button-row">
-            <button id="connectBtn">Connect + Start Mic</button>
-            <button id="disconnectBtn" class="secondary">Disconnect</button>
-            <button id="interruptBtn" class="danger">Interrupt</button>
+            <button id="connectBtn" data-i18n="connectStartMic">Connect + Start Mic</button>
+            <button id="disconnectBtn" class="secondary" data-i18n="disconnect">Disconnect</button>
+            <button id="interruptBtn" class="danger" data-i18n="interrupt">Interrupt</button>
           </div>
 
           <div class="status-list compact">
-            <div><span>Connection</span><strong id="connectionStatus">disconnected</strong></div>
-            <div><span>Audio</span><strong id="audioStatus">idle</strong></div>
+            <div><span data-i18n="connection">Connection</span><strong id="connectionStatus">disconnected</strong></div>
+            <div><span data-i18n="audio">Audio</span><strong id="audioStatus">idle</strong></div>
           </div>
 
           <pre id="logs" class="logs"></pre>
