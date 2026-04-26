@@ -1,3 +1,4 @@
+// AI辅助生成：ChatGPT-5.3 Codex, 2025-11-03
 # Local Voice RAG Assistant
 
 This file is a starter knowledge document.

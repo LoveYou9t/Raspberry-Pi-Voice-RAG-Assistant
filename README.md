@@ -4,8 +4,7 @@
 
 ## 功能范围（当前）
 
-- WebSocket 全双工音频传输（默认上/下行 Opus，能力不足时自动回退 PCM16）
-- 下行音频按客户端声明采样率动态重采样后发送
+- WebSocket 全双工音频传输（上行麦克风 / 下行 PCM）
 - 统一传输控制（WiFi / Bluetooth Serial / Wired Serial）
 - 串口半双工语音链路（支持上行语音与下行 TTS 回传，可用于蓝牙 RFCOMM 或有线 UART）
 - STT（优先 Whisper.cpp q5_0，失败时自动回退到 Faster-Whisper）
@@ -84,16 +83,6 @@ LLM 保活与启动预热可在 `.env` 配置：
 - `LLM_KEEPALIVE_INTERVAL_SECONDS=300`
 - `LLM_KEEPALIVE_PROMPT=嗯`
 
-WebSocket 音频协商可在 `.env` 配置：
-
-- `WS_DEFAULT_AUDIO_CODEC=opus`
-- `WS_DEFAULT_UPLINK_SAMPLE_RATE=16000`
-- `WS_DEFAULT_DOWNLINK_SAMPLE_RATE=16000`
-- `WS_SUPPORTED_AUDIO_CODECS=opus,pcm16`
-- `WS_SUPPORTED_SAMPLE_RATES=16000,24000,48000`
-- `WS_OPUS_FRAME_MS=20`
-- `WS_OPUS_BITRATE=24000`
-
 LLM 排障命令：
 
 - `docker exec edge_ollama ollama ps`
@@ -166,7 +155,6 @@ ls -l /dev/ttyAMA0 /dev/rfcomm0
 ```
 
 若 `rfcomm0` 不存在，请先在宿主机完成蓝牙配对并创建 RFCOMM 设备。
-
 1. 重启服务：
 
 ```bash

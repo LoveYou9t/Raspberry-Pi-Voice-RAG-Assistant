@@ -1,3 +1,4 @@
+# // AI辅助生成：ChatGPT-5.3 Codex, 2025-11-03
 from __future__ import annotations
 
 import os

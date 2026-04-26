@@ -290,15 +290,6 @@ class VoiceClient {
     this.sourceNode = null;
     this.processorNode = null;
     this.targetSampleRate = 16000;
-    this.uplinkSampleRate = 16000;
-    this.downlinkSampleRate = 16000;
-    this.uplinkCodec = "pcm16";
-    this.downlinkCodec = "pcm16";
-    this.audioEncoder = null;
-    this.audioDecoder = null;
-    this.encoderTimestampUs = 0;
-    this.decoderTimestampUs = 0;
-    this.opusBitrate = 24000;
     this.jitterSafetySeconds = 0.1;
     this.connectionState = "disconnected";
     this.audioState = "idle";
@@ -352,7 +343,6 @@ class VoiceClient {
 
     this.audioContext = this.audioContext || new AudioContext();
     await this.audioContext.resume();
-    this.downlinkSampleRate = this.audioContext.sampleRate;
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -377,16 +367,15 @@ class VoiceClient {
 
       this.socket.onmessage = async (event) => {
         if (typeof event.data === "string") {
-          await this.handleControlFrame(event.data);
+          this.handleControlFrame(event.data);
           return;
         }
         const buffer = event.data instanceof Blob ? await event.data.arrayBuffer() : event.data;
-        this.handleIncomingAudio(buffer);
+        this.handleIncomingPcm(buffer);
       };
 
       this.socket.onclose = () => {
         this.stopMicrophone();
-        this.disposeCodecWorkers();
         this.setConnection("disconnected");
         this.setAudio("idle");
         this.log(t("logWsDisconnected"));
@@ -412,8 +401,6 @@ class VoiceClient {
       this.socket = null;
     }
 
-    this.disposeCodecWorkers();
-
     this.setConnection("disconnected");
     this.setAudio("idle");
   }
@@ -425,28 +412,15 @@ class VoiceClient {
     this.socket.send(JSON.stringify({ action }));
   }
 
-  async handleControlFrame(rawText) {
+  handleControlFrame(rawText) {
     try {
       const message = JSON.parse(rawText);
       if (message.event === "ready") {
-        await this.applyServerAudioPolicy(message.audio || {});
         this.log(
           t("logGatewayReady", {
             sample_rate: message.sample_rate,
             mode: message.transport_mode || t("commonUnknown"),
           })
-        );
-        this.sendClientAudioConfig();
-        return;
-      }
-      if (message.event === "audio_config_applied") {
-        const audio = message.audio || {};
-        this.uplinkCodec = audio.uplink_codec || this.uplinkCodec;
-        this.downlinkCodec = audio.downlink_codec || this.downlinkCodec;
-        this.uplinkSampleRate = Number(audio.uplink_sample_rate) || this.uplinkSampleRate;
-        this.downlinkSampleRate = Number(audio.downlink_sample_rate) || this.downlinkSampleRate;
-        this.log(
-          `audio config applied: up=${this.uplinkCodec}@${this.uplinkSampleRate} down=${this.downlinkCodec}@${this.downlinkSampleRate}`
         );
         return;
       }
@@ -461,135 +435,6 @@ class VoiceClient {
     } catch {
       this.log(t("logTextFrame", { text: rawText }));
     }
-  }
-
-  async applyServerAudioPolicy(audioCaps) {
-    const supportedCodecs = Array.isArray(audioCaps.supported_codecs) ? audioCaps.supported_codecs : ["pcm16"];
-    const supportedSampleRates = Array.isArray(audioCaps.supported_sample_rates)
-      ? audioCaps.supported_sample_rates
-      : [16000];
-
-    const canUseOpus = supportedCodecs.includes("opus") && this.browserOpusSupport();
-    this.uplinkCodec = canUseOpus ? "opus" : "pcm16";
-    this.downlinkCodec = canUseOpus ? "opus" : "pcm16";
-
-    const defaultUp = Number(audioCaps.default_uplink_sample_rate) || 16000;
-    this.uplinkSampleRate = supportedSampleRates.includes(defaultUp) ? defaultUp : 16000;
-
-    const preferredDown = this.audioContext ? this.audioContext.sampleRate : 16000;
-    this.downlinkSampleRate = supportedSampleRates.includes(preferredDown)
-      ? preferredDown
-      : Number(audioCaps.default_downlink_sample_rate) || 16000;
-
-    await this.prepareCodecWorkers();
-  }
-
-  browserOpusSupport() {
-    return typeof window.AudioEncoder !== "undefined" && typeof window.AudioDecoder !== "undefined";
-  }
-
-  async prepareCodecWorkers() {
-    this.disposeCodecWorkers();
-
-    if (this.uplinkCodec === "opus") {
-      try {
-        const encoderConfig = {
-          codec: "opus",
-          sampleRate: this.uplinkSampleRate,
-          numberOfChannels: 1,
-          bitrate: this.opusBitrate,
-        };
-        if (typeof AudioEncoder.isConfigSupported === "function") {
-          const supported = await AudioEncoder.isConfigSupported(encoderConfig);
-          if (!supported.supported) {
-            throw new Error("AudioEncoder opus config unsupported");
-          }
-        }
-        this.audioEncoder = new AudioEncoder({
-          output: (chunk) => {
-            if (!this.isConnected()) {
-              return;
-            }
-            const packet = new Uint8Array(chunk.byteLength);
-            chunk.copyTo(packet);
-            this.socket.send(packet.buffer);
-          },
-          error: (error) => this.log(`opus encoder error: ${error.message}`),
-        });
-        this.audioEncoder.configure(encoderConfig);
-      } catch (error) {
-        this.log(`opus uplink unavailable, fallback pcm16: ${error.message}`);
-        this.uplinkCodec = "pcm16";
-        this.audioEncoder = null;
-      }
-    }
-
-    if (this.downlinkCodec === "opus") {
-      try {
-        const decoderConfig = {
-          codec: "opus",
-          sampleRate: this.downlinkSampleRate,
-          numberOfChannels: 1,
-        };
-        if (typeof AudioDecoder.isConfigSupported === "function") {
-          const supported = await AudioDecoder.isConfigSupported(decoderConfig);
-          if (!supported.supported) {
-            throw new Error("AudioDecoder opus config unsupported");
-          }
-        }
-        this.audioDecoder = new AudioDecoder({
-          output: (audioData) => {
-            const float32 = new Float32Array(audioData.numberOfFrames);
-            audioData.copyTo(float32, { planeIndex: 0, format: "f32-planar" });
-            this.schedulePlayback(float32, audioData.sampleRate);
-            audioData.close();
-          },
-          error: (error) => this.log(`opus decoder error: ${error.message}`),
-        });
-        this.audioDecoder.configure(decoderConfig);
-      } catch (error) {
-        this.log(`opus downlink unavailable, fallback pcm16: ${error.message}`);
-        this.downlinkCodec = "pcm16";
-        this.audioDecoder = null;
-      }
-    }
-  }
-
-  sendClientAudioConfig() {
-    if (!this.isConnected()) {
-      return;
-    }
-
-    this.socket.send(
-      JSON.stringify({
-        action: "client_audio_config",
-        uplink_codec: this.uplinkCodec,
-        uplink_sample_rate: this.uplinkSampleRate,
-        downlink_codec: this.downlinkCodec,
-        downlink_sample_rate: this.downlinkSampleRate,
-      })
-    );
-  }
-
-  disposeCodecWorkers() {
-    if (this.audioEncoder) {
-      try {
-        this.audioEncoder.close();
-      } catch {
-        // Ignore close errors.
-      }
-      this.audioEncoder = null;
-    }
-    if (this.audioDecoder) {
-      try {
-        this.audioDecoder.close();
-      } catch {
-        // Ignore close errors.
-      }
-      this.audioDecoder = null;
-    }
-    this.encoderTimestampUs = 0;
-    this.decoderTimestampUs = 0;
   }
 
   async startMicrophone() {
@@ -614,24 +459,8 @@ class VoiceClient {
       }
 
       const input = event.inputBuffer.getChannelData(0);
-      const downsampled = this.downsample(input, this.audioContext.sampleRate, this.uplinkSampleRate);
+      const downsampled = this.downsample(input, this.audioContext.sampleRate, this.targetSampleRate);
       const pcm = this.floatToInt16(downsampled);
-
-      if (this.uplinkCodec === "opus" && this.audioEncoder) {
-        const frame = new AudioData({
-          format: "s16",
-          sampleRate: this.uplinkSampleRate,
-          numberOfFrames: pcm.length,
-          numberOfChannels: 1,
-          timestamp: this.encoderTimestampUs,
-          data: pcm,
-        });
-        this.encoderTimestampUs += Math.round((pcm.length * 1_000_000) / this.uplinkSampleRate);
-        this.audioEncoder.encode(frame);
-        frame.close();
-        return;
-      }
-
       this.socket.send(pcm.buffer);
     };
 
@@ -659,19 +488,8 @@ class VoiceClient {
     }
   }
 
-  handleIncomingAudio(arrayBuffer) {
+  handleIncomingPcm(arrayBuffer) {
     if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-      return;
-    }
-
-    if (this.downlinkCodec === "opus" && this.audioDecoder) {
-      const encoded = new EncodedAudioChunk({
-        type: "key",
-        timestamp: this.decoderTimestampUs,
-        data: new Uint8Array(arrayBuffer),
-      });
-      this.decoderTimestampUs += 20_000;
-      this.audioDecoder.decode(encoded);
       return;
     }
 
@@ -682,10 +500,10 @@ class VoiceClient {
       float32Data[i] = int16Data[i] / 32768.0;
     }
 
-    this.schedulePlayback(float32Data, this.targetSampleRate);
+    this.schedulePlayback(float32Data);
   }
 
-  schedulePlayback(float32Data, sampleRate) {
+  schedulePlayback(float32Data) {
     if (!this.audioContext) {
       return;
     }
@@ -694,8 +512,7 @@ class VoiceClient {
       this.nextPlayTime = this.audioContext.currentTime + this.jitterSafetySeconds;
     }
 
-    const playbackRate = Number(sampleRate) || this.targetSampleRate;
-    const buffer = this.audioContext.createBuffer(1, float32Data.length, playbackRate);
+    const buffer = this.audioContext.createBuffer(1, float32Data.length, this.targetSampleRate);
     buffer.getChannelData(0).set(float32Data);
 
     const source = this.audioContext.createBufferSource();
